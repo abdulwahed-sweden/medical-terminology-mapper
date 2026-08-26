@@ -25,11 +25,19 @@ from sqlalchemy.orm import Session, sessionmaker
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 
-DEFAULT_TEST_DB_URL = "postgresql+psycopg://mtm:mtm@localhost:5432/mtm"
-
 
 def _database_url() -> str:
-    return os.environ.get("DATABASE_URL", DEFAULT_TEST_DB_URL)
+    """DATABASE_URL from the environment, else whatever the app is configured with.
+
+    Falling back to the application settings means `.env` works for the test
+    suite too. Without it, a developer whose database is not on the default port
+    would see every DB-backed test skip rather than run -- a silent pass, which
+    is the worst possible outcome for a suite whose job is to prove a database
+    guarantee.
+    """
+    from app.config import get_settings
+
+    return os.environ.get("DATABASE_URL") or get_settings().database_url
 
 
 @pytest.fixture(scope="session")
