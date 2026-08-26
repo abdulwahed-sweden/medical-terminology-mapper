@@ -140,9 +140,7 @@ def map_term(
     latency_ms_rerank = _elapsed_ms(rerank_started)
 
     top = result.top if result is not None else None
-    suggested_code = None if result is None or result.no_good_match else (
-        top.code if top else None
-    )
+    suggested_code = None if result is None or result.no_good_match else (top.code if top else None)
     model_confidence = None if suggested_code is None or top is None else top.confidence
 
     # ------------------------------------------------------------- audit row
@@ -187,4 +185,4 @@ def _require_loaded(session: Session, system: str, version: str) -> None:
 
 
 def _elapsed_ms(started: float) -> int:
-    return int(round((time.perf_counter() - started) * 1000))
+    return round((time.perf_counter() - started) * 1000)

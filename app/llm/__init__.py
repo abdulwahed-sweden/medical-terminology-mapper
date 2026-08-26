@@ -24,6 +24,8 @@ def build_llm_provider(settings: Settings) -> LLMProvider:
             model_id=settings.llm_model,
             timeout=settings.llm_timeout_seconds,
             max_output_tokens=settings.llm_max_output_tokens,
+            effort=settings.llm_effort,
+            use_structured_output=settings.llm_structured_output,
         )
 
     if settings.llm_provider == "openai_compat":

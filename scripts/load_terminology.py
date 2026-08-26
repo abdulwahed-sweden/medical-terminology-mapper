@@ -22,14 +22,14 @@ from pathlib import Path
 # Allow `python scripts/load_terminology.py` from a checkout without installing.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.config import get_settings  # noqa: E402
-from app.db.models import loaded_versions, upsert_concepts  # noqa: E402
-from app.db.session import session_scope  # noqa: E402
-from app.logging_setup import configure_logging  # noqa: E402
-from app.terminology.base import Concept, TerminologySystem  # noqa: E402
-from app.terminology.icd10se import ICD10SE  # noqa: E402
-from app.terminology.kva import KVA  # noqa: E402
-from app.terminology.snomed import SnomedCT  # noqa: E402
+from app.config import get_settings
+from app.db.models import loaded_versions, upsert_concepts
+from app.db.session import session_scope
+from app.logging_setup import configure_logging
+from app.terminology.base import Concept, TerminologySystem
+from app.terminology.icd10se import ICD10SE
+from app.terminology.kva import KVA
+from app.terminology.snomed import SnomedCT
 
 LOADERS: dict[str, TerminologySystem] = {
     "icd10se": ICD10SE(),

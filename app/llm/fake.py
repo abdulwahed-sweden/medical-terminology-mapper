@@ -27,9 +27,7 @@ class FakeLLMProvider:
     def __init__(self, model_id: str = "fake-rerank-v1") -> None:
         self.model_id = model_id
 
-    def rerank(
-        self, query: str, candidates: list[Candidate], prompt: PromptSpec
-    ) -> RerankResult:
+    def rerank(self, query: str, candidates: list[Candidate], prompt: PromptSpec) -> RerankResult:
         if not candidates:
             return RerankResult(
                 ranked=[],
@@ -54,7 +52,7 @@ class FakeLLMProvider:
                 ),
                 reason=(
                     f"fake provider: ranked {position + 1} by lexical score "
-                    f"{candidate.lexical_score if candidate.lexical_score is not None else 0.0:.3f}"
+                    f"{candidate.lexical_score or 0.0:.3f}"
                 ),
             )
             for position, candidate in enumerate(ordered)
@@ -63,5 +61,7 @@ class FakeLLMProvider:
         return RerankResult(
             ranked=ranked,
             no_good_match=False,
-            notes=f"fake provider: deterministic lexical-score ordering of {len(ranked)} candidates",
+            notes=(
+                f"fake provider: deterministic lexical-score ordering of {len(ranked)} candidates"
+            ),
         )

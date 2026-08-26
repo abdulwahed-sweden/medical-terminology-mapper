@@ -172,7 +172,7 @@ def test_empty_file_is_reported(tmp_path: Path) -> None:
 
 
 def test_snomed_load_refuses_with_a_licensing_message(tmp_path: Path) -> None:
-    with pytest.raises(TerminologyLicenceRequired, match="LICENSING.md"):
+    with pytest.raises(TerminologyLicenceRequired, match=r"LICENSING\.md"):
         list(SnomedCT().load(tmp_path / "anything.txt", "2026"))
 
 

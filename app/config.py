@@ -20,9 +20,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
-    )
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- Database -----------------------------------------------------------
     database_url: str = Field(
@@ -49,7 +47,18 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     openai_chat_base_url: str = "https://api.openai.com/v1"
     llm_timeout_seconds: float = 60.0
-    llm_max_output_tokens: int = 2048
+    # Generous by default: on current Claude models thinking tokens count
+    # towards this ceiling, and a truncated reply wastes the one repair retry
+    # on a doomed parse.
+    llm_max_output_tokens: int = 8192
+    llm_effort: Literal["low", "medium", "high", "xhigh", "max"] = "medium"
+    llm_structured_output: bool = Field(
+        default=True,
+        description=(
+            "Ask the provider to constrain output to the rerank JSON schema. "
+            "Turn off for a model that does not support constrained output."
+        ),
+    )
 
     # --- Retrieval ----------------------------------------------------------
     lexical_top_k: int = 20

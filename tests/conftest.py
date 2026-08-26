@@ -93,9 +93,7 @@ def icd10se_loaded(db_session: Session) -> str:
     from app.db.models import upsert_concepts
     from app.terminology.icd10se import ICD10SE
 
-    upsert_concepts(
-        db_session, ICD10SE().load(FIXTURES / "icd10se_sample.txt", SAMPLE_VERSION)
-    )
+    upsert_concepts(db_session, ICD10SE().load(FIXTURES / "icd10se_sample.txt", SAMPLE_VERSION))
     return SAMPLE_VERSION
 
 
@@ -115,7 +113,7 @@ def kva_loaded(db_session: Session) -> str:
 
 
 @pytest.fixture
-def embedding_provider() -> "FakeEmbeddingProvider":  # noqa: F821
+def embedding_provider() -> FakeEmbeddingProvider:  # noqa: F821
     from app.config import get_settings
     from app.embeddings.fake import FakeEmbeddingProvider
 
@@ -123,9 +121,7 @@ def embedding_provider() -> "FakeEmbeddingProvider":  # noqa: F821
 
 
 @pytest.fixture
-def icd10se_embedded(
-    db_session: Session, icd10se_loaded: str, embedding_provider: object
-) -> str:
+def icd10se_embedded(db_session: Session, icd10se_loaded: str, embedding_provider: object) -> str:
     """Embed the loaded ICD-10-SE sample with the deterministic fake provider."""
     import sqlalchemy as sa
 
@@ -162,7 +158,7 @@ def icd10se_embedded(
 
 
 @pytest.fixture
-def client(db_session: Session) -> Iterator["TestClient"]:  # noqa: F821
+def client(db_session: Session) -> Iterator[TestClient]:  # noqa: F821
     """A TestClient bound to the test transaction.
 
     The dependency override matters: without it the app would open its own

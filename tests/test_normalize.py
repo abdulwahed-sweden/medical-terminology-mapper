@@ -17,8 +17,14 @@ def test_case_and_whitespace_are_folded_together() -> None:
 
 @pytest.mark.parametrize(
     "raw",
-    ["Högt Blodtryck", "  högt blodtryck  ", "HÖGT\tBLODTRYCK", "högt\n\nblodtryck",
-     "Högt, blodtryck.", "högt  blodtryck!"],
+    [
+        "Högt Blodtryck",
+        "  högt blodtryck  ",
+        "HÖGT\tBLODTRYCK",
+        "högt\n\nblodtryck",
+        "Högt, blodtryck.",
+        "högt  blodtryck!",
+    ],
 )
 def test_surface_variants_collapse_to_one_form(raw: str) -> None:
     assert normalize(raw).normalized == "högt blodtryck"
@@ -55,7 +61,7 @@ def test_word_internal_hyphens_are_kept() -> None:
 
 
 def test_edge_hyphens_are_dropped() -> None:
-    """"hjärt- och njursjukdom" keeps the words, drops the dangling hyphen."""
+    """ "hjärt- och njursjukdom" keeps the words, drops the dangling hyphen."""
     assert normalize("hjärt- och njursjukdom").tokens == ["hjärt", "och", "njursjukdom"]
     assert normalize("-lumbago-").normalized == "lumbago"
 

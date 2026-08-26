@@ -71,9 +71,7 @@ def _content(proposal: Any) -> dict[str, Any]:
 # --------------------------------------------------------------- happy path
 
 
-def test_pipeline_produces_a_pending_proposal(
-    db_session: Session, icd10se_embedded: str
-) -> None:
+def test_pipeline_produces_a_pending_proposal(db_session: Session, icd10se_embedded: str) -> None:
     outcome = _run(db_session, icd10se_embedded)
     proposal = outcome.proposal
 
@@ -92,9 +90,7 @@ def test_a_new_proposal_has_no_decision(db_session: Session, icd10se_embedded: s
     assert outcome.proposal.status == "pending"
 
 
-def test_provenance_is_recorded_on_the_proposal(
-    db_session: Session, icd10se_embedded: str
-) -> None:
+def test_provenance_is_recorded_on_the_proposal(db_session: Session, icd10se_embedded: str) -> None:
     """Principle 2: the proposal must name everything that shaped it."""
     proposal = _run(db_session, icd10se_embedded).proposal
     prompt = load_prompt()
@@ -110,9 +106,7 @@ def test_provenance_is_recorded_on_the_proposal(
     assert proposal.latency_ms_rerank >= 0
 
 
-def test_candidates_are_stored_with_every_score(
-    db_session: Session, icd10se_embedded: str
-) -> None:
+def test_candidates_are_stored_with_every_score(db_session: Session, icd10se_embedded: str) -> None:
     proposal = _run(db_session, icd10se_embedded).proposal
     assert proposal.candidates
 
@@ -132,9 +126,7 @@ def test_candidates_are_stored_with_every_score(
     assert vector_only[0]["lexical_score"] is None
 
 
-def test_rerank_payload_is_stored_verbatim(
-    db_session: Session, icd10se_embedded: str
-) -> None:
+def test_rerank_payload_is_stored_verbatim(db_session: Session, icd10se_embedded: str) -> None:
     outcome = _run(db_session, icd10se_embedded)
     assert outcome.rerank is not None
     assert outcome.proposal.rerank == outcome.rerank.model_dump(mode="json")
@@ -186,9 +178,7 @@ class _BrokenLLM:
     provider_id = "broken"
     model_id = "broken-v1"
 
-    def rerank(
-        self, query: str, candidates: list[Candidate], prompt: PromptSpec
-    ) -> RerankResult:
+    def rerank(self, query: str, candidates: list[Candidate], prompt: PromptSpec) -> RerankResult:
         raise RerankFailed("simulated: unusable response twice")
 
 
@@ -196,9 +186,7 @@ class _HallucinatingLLM:
     provider_id = "hallucinating"
     model_id = "hallucinating-v1"
 
-    def rerank(
-        self, query: str, candidates: list[Candidate], prompt: PromptSpec
-    ) -> RerankResult:
+    def rerank(self, query: str, candidates: list[Candidate], prompt: PromptSpec) -> RerankResult:
         return RerankResult(
             ranked=[
                 RankedCode(code="Z99.9", confidence=0.99, reason="not a candidate"),
@@ -236,9 +224,7 @@ def test_hallucinated_code_never_reaches_the_proposal(
     assert outcome.proposal.suggested_code == ranked_codes[0]
 
 
-def test_unloaded_version_is_reported_clearly(
-    db_session: Session, icd10se_embedded: str
-) -> None:
+def test_unloaded_version_is_reported_clearly(db_session: Session, icd10se_embedded: str) -> None:
     with pytest.raises(TerminologyVersionNotLoaded, match="load_terminology"):
         _run(db_session, "1999-not-loaded")
 
@@ -246,7 +232,7 @@ def test_unloaded_version_is_reported_clearly(
 def test_snomed_is_refused_with_the_licensing_message(
     db_session: Session, icd10se_embedded: str
 ) -> None:
-    with pytest.raises(TerminologyLicenceRequired, match="LICENSING.md"):
+    with pytest.raises(TerminologyLicenceRequired, match=r"LICENSING\.md"):
         _run(db_session, icd10se_embedded, target_system="snomed")
 
 

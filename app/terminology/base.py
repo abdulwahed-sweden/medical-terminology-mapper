@@ -95,8 +95,7 @@ def is_code_interval(code: str) -> bool:
 
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
-_DASHES = str.maketrans({"‐": "-", "‑": "-", "‒": "-", "–": "-",
-                         "—": "-", "−": "-"})
+_DASHES = str.maketrans({"‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "−": "-"})
 
 # Canonical field name -> accepted header spellings (already folded).
 _HEADER_ALIASES: Mapping[str, tuple[str, ...]] = {
@@ -142,8 +141,11 @@ def fold_header(raw: str) -> str:
     text = text.casefold()
     text = text.replace("Ɨ", "t").replace("ɨ", "t").replace("†", "t")
     text = (
-        text.replace("å", "a").replace("ä", "a").replace("ö", "o")
-        .replace("é", "e").replace("ü", "u")
+        text.replace("å", "a")
+        .replace("ä", "a")
+        .replace("ö", "o")
+        .replace("é", "e")
+        .replace("ü", "u")
     )
     return _WS_RE.sub(" ", text).strip()
 
@@ -206,7 +208,9 @@ def read_classification_tsv(
     yield from groups.items()
 
 
-def collect_synonyms(rows: Sequence[Mapping[str, str]], *, extra_fields: Sequence[str]) -> list[str]:
+def collect_synonyms(
+    rows: Sequence[Mapping[str, str]], *, extra_fields: Sequence[str]
+) -> list[str]:
     """Gather alternative surface forms for a code, order-preserving and deduped.
 
     `Utesluter` is deliberately NOT a synonym source. It lists what the code

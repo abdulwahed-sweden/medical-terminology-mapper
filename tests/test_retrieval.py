@@ -46,15 +46,13 @@ def test_exact_term_is_retrieved(db_session: Session, icd10se_loaded: str) -> No
 
 
 def test_inclusion_term_retrieves_its_code(db_session: Session, icd10se_loaded: str) -> None:
-    """"Högt blodtryck" is an Innefattar term on I10, not its preferred term."""
+    """ "Högt blodtryck" is an Innefattar term on I10, not its preferred term."""
     codes = _lexical(db_session, "högt blodtryck", icd10se_loaded)
     assert "I10" in codes
 
 
-def test_misspelling_is_tolerated_by_trigrams(
-    db_session: Session, icd10se_loaded: str
-) -> None:
-    """"hjartinfarkt" lacks the ä; full-text search alone would find nothing."""
+def test_misspelling_is_tolerated_by_trigrams(db_session: Session, icd10se_loaded: str) -> None:
+    """ "hjartinfarkt" lacks the ä; full-text search alone would find nothing."""
     codes = _lexical(db_session, "hjartinfarkt", icd10se_loaded)
     assert "I21" in codes
     assert "I21.9" in codes
@@ -94,9 +92,7 @@ def test_results_are_ordered_by_score(db_session: Session, icd10se_loaded: str) 
     assert [c.lexical_rank for c in results] == list(range(1, len(results) + 1))
 
 
-def test_code_intervals_are_never_candidates(
-    db_session: Session, icd10se_loaded: str
-) -> None:
+def test_code_intervals_are_never_candidates(db_session: Session, icd10se_loaded: str) -> None:
     """I10-I15 is a section heading. Proposing it as a diagnosis code is a bug."""
     codes = _lexical(db_session, "hypertonisjukdomar högt blodtryck", icd10se_loaded)
     assert codes  # the query does match the section's text

@@ -154,20 +154,85 @@ def run_with_one_repair(call: Callable[[str | None], str]) -> RerankResult:
     try:
         return parse_rerank_payload(call(None))
     except RerankParseError as first:
-        logger.warning(
-            "rerank_response_malformed", extra={"attempt": 1, "reason": str(first)}
-        )
+        logger.warning("rerank_response_malformed", extra={"attempt": 1, "reason": str(first)})
         try:
             result = parse_rerank_payload(call(REPAIR_INSTRUCTION))
         except RerankParseError as second:
-            logger.error(
-                "rerank_response_malformed", extra={"attempt": 2, "reason": str(second)}
-            )
+            logger.error("rerank_response_malformed", extra={"attempt": 2, "reason": str(second)})
             raise RerankFailed(
                 f"provider returned an unusable response twice: {second}"
             ) from second
         logger.info("rerank_repair_succeeded", extra={"attempt": 2})
         return result
+
+
+# --------------------------------------------------------------------------- #
+# What the model is shown
+# --------------------------------------------------------------------------- #
+
+# The JSON Schema the reply must satisfy. Kept next to the parser so the schema
+# a provider enforces server-side and the schema the parser checks cannot drift
+# apart.
+RERANK_JSON_SCHEMA: dict[str, object] = {
+    "type": "object",
+    "properties": {
+        "ranked": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string"},
+                    "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+                    "reason": {"type": "string"},
+                },
+                "required": ["code", "confidence", "reason"],
+                "additionalProperties": False,
+            },
+        },
+        "no_good_match": {"type": "boolean"},
+        "notes": {"type": "string"},
+    },
+    "required": ["ranked", "no_good_match"],
+    "additionalProperties": False,
+}
+
+# Synonyms are truncated per candidate: a handful of alternative surface forms
+# helps the model recognise a term, but a concept carrying forty inclusion terms
+# would crowd out the other candidates for no gain.
+MAX_SYNONYMS_SHOWN = 8
+
+
+def build_rerank_input(
+    query: str,
+    candidates: Sequence[Candidate],
+    *,
+    target_system: str,
+    terminology_version: str,
+) -> str:
+    """Render the model's input as JSON.
+
+    One renderer for every provider, so "what the model saw" means the same
+    thing regardless of which one produced a proposal.
+    """
+    payload = {
+        "query": query,
+        "target_system": target_system,
+        "terminology_version": terminology_version,
+        "candidates": [
+            {
+                "code": candidate.code,
+                "preferred_term": candidate.preferred_term,
+                "synonyms": candidate.synonyms[:MAX_SYNONYMS_SHOWN],
+                "retrieval": {
+                    "sources": candidate.sources,
+                    "lexical_score": candidate.lexical_score,
+                    "vector_score": candidate.vector_score,
+                },
+            }
+            for candidate in candidates
+        ],
+    }
+    return json.dumps(payload, ensure_ascii=False, indent=2)
 
 
 # --------------------------------------------------------------------------- #

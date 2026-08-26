@@ -97,9 +97,7 @@ def _resolve_final_code(
         # Rejecting means "none of this is right". Any code supplied alongside
         # it is a contradiction, not an extra.
         if final_code:
-            raise InvalidDecision(
-                "a reject records no code; use 'correct' to supply the right one"
-            )
+            raise InvalidDecision("a reject records no code; use 'correct' to supply the right one")
         return None
 
     if decision == "accept":
@@ -130,9 +128,7 @@ def _validate_code(session: Session, proposal: ProposalRow, code: str) -> str:
         raise InvalidDecision(f"unknown target system {system!r}")
 
     if not validator.validate_code_format(code):
-        raise InvalidDecision(
-            f"{code!r} is not a valid {system} code format"
-        )
+        raise InvalidDecision(f"{code!r} is not a valid {system} code format")
 
     # Beyond format: the code must actually exist in the version this proposal
     # was computed against. A well-formed code that is not in the release would

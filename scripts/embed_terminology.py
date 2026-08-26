@@ -19,13 +19,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import sqlalchemy as sa  # noqa: E402
+import sqlalchemy as sa
 
-from app.config import get_settings  # noqa: E402
-from app.db.models import ConceptEmbeddingRow, ConceptRow  # noqa: E402
-from app.db.session import session_scope  # noqa: E402
-from app.embeddings import build_embedding_provider  # noqa: E402
-from app.logging_setup import configure_logging  # noqa: E402
+from app.config import get_settings
+from app.db.models import ConceptEmbeddingRow, ConceptRow
+from app.db.session import session_scope
+from app.embeddings import build_embedding_provider
+from app.logging_setup import configure_logging
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,9 +50,7 @@ def main(argv: list[str] | None = None) -> int:
         settings = settings.model_copy(update={"embedding_model": args.model})
 
     provider = build_embedding_provider(settings)
-    print(
-        f"provider={provider.provider_id} model={provider.model_id} dim={provider.dim}"
-    )
+    print(f"provider={provider.provider_id} model={provider.model_id} dim={provider.dim}")
     if provider.dim != settings.embedding_dim:
         print(
             f"ERROR: provider dimension {provider.dim} != EMBEDDING_DIM "

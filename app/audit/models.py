@@ -39,9 +39,7 @@ DECISION_KINDS = ("accept", "reject", "correct")
 class ProposalRow(Base):
     __tablename__ = "proposals"
     __table_args__ = (
-        CheckConstraint(
-            "status IN ('pending', 'rerank_failed')", name="ck_proposals_status"
-        ),
+        CheckConstraint("status IN ('pending', 'rerank_failed')", name="ck_proposals_status"),
         Index("ix_proposals_trace_id", "trace_id"),
         Index("ix_proposals_created_at", "created_at"),
     )
@@ -84,9 +82,7 @@ class DecisionRow(Base):
         # One decision per proposal. This is what makes "the human decided" a
         # single, unambiguous, unrepeatable event.
         UniqueConstraint("proposal_id", name="uq_decisions_proposal_id"),
-        CheckConstraint(
-            "decision IN ('accept', 'reject', 'correct')", name="ck_decisions_kind"
-        ),
+        CheckConstraint("decision IN ('accept', 'reject', 'correct')", name="ck_decisions_kind"),
         # A reject records no code; accept and correct must record one.
         CheckConstraint(
             "(decision = 'reject' AND final_code IS NULL)"

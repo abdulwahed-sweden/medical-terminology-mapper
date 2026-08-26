@@ -154,7 +154,7 @@ medical-terminology-mapper/
 ```python
 class Concept(BaseModel):
     system: Literal["icd10se", "kva", "snomed"]
-    version: str            # e.g. "2026"
+    version: str  # e.g. "2026"
     code: str
     preferred_term: str
     synonyms: list[str] = []
@@ -162,8 +162,10 @@ class Concept(BaseModel):
     is_leaf: bool
     chapter: str | None = None
 
+
 class TerminologySystem(Protocol):
     system_id: str
+
     def load(self, path: Path, version: str) -> Iterable[Concept]: ...
     def validate_code_format(self, code: str) -> bool: ...
 ```
@@ -226,7 +228,10 @@ Union of both candidate sets, deduplicated by `(system, version, code)`. Each ca
 class LLMProvider(Protocol):
     provider_id: str
     model_id: str
-    def rerank(self, query: str, candidates: list[Candidate], prompt: PromptSpec) -> RerankResult: ...
+
+    def rerank(
+        self, query: str, candidates: list[Candidate], prompt: PromptSpec
+    ) -> RerankResult: ...
 ```
 
 `RerankResult` is validated against a strict JSON schema:

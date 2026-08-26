@@ -64,9 +64,7 @@ class OpenAICompatEmbeddingProvider:
             raise EmbeddingError(f"unexpected embeddings response shape: {body!r}") from exc
 
         if len(vectors) != len(texts):
-            raise EmbeddingError(
-                f"asked for {len(texts)} embeddings, got {len(vectors)}"
-            )
+            raise EmbeddingError(f"asked for {len(texts)} embeddings, got {len(vectors)}")
         for vector in vectors:
             if len(vector) != self.dim:
                 raise EmbeddingError(

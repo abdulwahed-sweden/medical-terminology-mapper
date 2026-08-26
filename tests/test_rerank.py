@@ -81,9 +81,7 @@ def test_valid_payload_parses() -> None:
 def test_code_fence_is_tolerated() -> None:
     """Models add fences habitually; refusing would waste the one retry on
     formatting no human ever sees."""
-    result = parse_rerank_payload(
-        '```json\n{"ranked": [], "no_good_match": true}\n```'
-    )
+    result = parse_rerank_payload('```json\n{"ranked": [], "no_good_match": true}\n```')
     assert result.no_good_match is True
 
 
@@ -93,14 +91,25 @@ def test_code_fence_is_tolerated() -> None:
         ("", "empty"),
         ("not json at all", "not JSON"),
         ("[1, 2, 3]", "not an object"),
-        ('{"ranked": [{"code": "I10", "confidence": 1.4, "reason": "x"}],'
-         ' "no_good_match": false}', "confidence out of range"),
-        ('{"ranked": [{"code": "I10", "confidence": -0.1, "reason": "x"}],'
-         ' "no_good_match": false}', "negative confidence"),
-        ('{"ranked": [{"code": "I10", "confidence": 0.5}], "no_good_match": false}',
-         "missing reason"),
-        ('{"ranked": [{"code": "I10", "confidence": 0.5, "reason": "x",'
-         ' "extra": 1}], "no_good_match": false}', "extra key"),
+        (
+            '{"ranked": [{"code": "I10", "confidence": 1.4, "reason": "x"}],'
+            ' "no_good_match": false}',
+            "confidence out of range",
+        ),
+        (
+            '{"ranked": [{"code": "I10", "confidence": -0.1, "reason": "x"}],'
+            ' "no_good_match": false}',
+            "negative confidence",
+        ),
+        (
+            '{"ranked": [{"code": "I10", "confidence": 0.5}], "no_good_match": false}',
+            "missing reason",
+        ),
+        (
+            '{"ranked": [{"code": "I10", "confidence": 0.5, "reason": "x",'
+            ' "extra": 1}], "no_good_match": false}',
+            "extra key",
+        ),
         ('{"ranked": [], "no_good_match": false, "surprise": true}', "extra top-level key"),
     ],
 )
@@ -119,8 +128,10 @@ def test_repair_retry_recovers_from_one_bad_reply() -> None:
         calls.append(repair)
         if repair is None:
             return "here you go: not actually json"
-        return '{"ranked": [{"code": "I10", "confidence": 0.9, "reason": "ok"}],' \
-               ' "no_good_match": false}'
+        return (
+            '{"ranked": [{"code": "I10", "confidence": 0.9, "reason": "ok"}],'
+            ' "no_good_match": false}'
+        )
 
     result = run_with_one_repair(call)
 
@@ -187,7 +198,7 @@ def test_hallucinated_code_is_logged(caplog: pytest.LogCaptureFixture) -> None:
         )
     events = [r for r in caplog.records if r.getMessage() == "hallucinated_code"]
     assert len(events) == 1
-    assert getattr(events[0], "code") == "Z99.9"
+    assert events[0].code == "Z99.9"
 
 
 def test_dropping_every_code_sets_no_good_match() -> None:

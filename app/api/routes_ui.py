@@ -17,9 +17,7 @@ router = APIRouter(include_in_schema=False)
 
 
 @router.get("/", response_class=HTMLResponse)
-def validator_page(
-    request: Request, session: SessionDep, settings: SettingsDep
-) -> HTMLResponse:
+def validator_page(request: Request, session: SessionDep, settings: SettingsDep) -> HTMLResponse:
     versions = [
         {"system": system, "version": version, "count": count}
         for system, version, count in loaded_versions(session)

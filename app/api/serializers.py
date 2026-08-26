@@ -20,7 +20,7 @@ def serialize_decision(row: DecisionRow) -> DecisionOut:
         id=row.id,
         proposal_id=row.proposal_id,
         created_at=row.created_at,
-        decision=row.decision,  # type: ignore[arg-type]
+        decision=row.decision,
         final_code=row.final_code,
         validator_note=row.validator_note,
         validator_id=row.validator_id,
@@ -29,8 +29,7 @@ def serialize_decision(row: DecisionRow) -> DecisionOut:
 
 def serialize_proposal(session: Session, proposal: ProposalRow) -> ProposalOut:
     terms = {
-        candidate["code"]: candidate.get("preferred_term")
-        for candidate in proposal.candidates
+        candidate["code"]: candidate.get("preferred_term") for candidate in proposal.candidates
     }
     rerank: dict[str, Any] = proposal.rerank or {}
 
@@ -60,7 +59,7 @@ def serialize_proposal(session: Session, proposal: ProposalRow) -> ProposalOut:
         id=proposal.id,
         trace_id=proposal.trace_id,
         created_at=proposal.created_at,
-        status=proposal.status,  # type: ignore[arg-type]
+        status=proposal.status,
         input_text=proposal.input_text,
         normalized_text=proposal.normalized_text,
         target_system=proposal.target_system,

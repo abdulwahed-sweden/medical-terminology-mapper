@@ -54,9 +54,7 @@ def test_confidence_is_labelled_as_the_models_own(
     assert "probability" not in str(body).lower()
 
 
-def test_trace_id_is_returned_and_recorded(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_trace_id_is_returned_and_recorded(client: TestClient, icd10se_embedded: str) -> None:
     response = client.post(
         "/map",
         json={"text": "astma", "target_system": "icd10se", "version": "2026-sample"},
@@ -79,9 +77,7 @@ def test_map_rejects_an_unknown_system(client: TestClient, icd10se_embedded: str
     assert response.status_code == 422
 
 
-def test_map_against_snomed_is_not_implemented(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_map_against_snomed_is_not_implemented(client: TestClient, icd10se_embedded: str) -> None:
     response = client.post("/map", json={"text": "astma", "target_system": "snomed"})
     assert response.status_code == 501
     assert "LICENSING.md" in response.json()["detail"]
@@ -116,9 +112,7 @@ def test_unknown_proposal_is_404(client: TestClient, icd10se_embedded: str) -> N
 # ---------------------------------------------------------------- /decisions
 
 
-def test_accept_records_the_suggested_code(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_accept_records_the_suggested_code(client: TestClient, icd10se_embedded: str) -> None:
     proposal = _map(client)
     response = client.post(
         "/decisions",
@@ -151,9 +145,7 @@ def test_reject_records_no_code(client: TestClient, icd10se_embedded: str) -> No
     assert body["validated_mapping"] is None
 
 
-def test_correct_records_the_humans_code(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_correct_records_the_humans_code(client: TestClient, icd10se_embedded: str) -> None:
     proposal = _map(client)
     body = client.post(
         "/decisions",
@@ -169,9 +161,7 @@ def test_correct_records_the_humans_code(
     assert body["decision"]["final_code"] != proposal["suggested_code"]
 
 
-def test_a_validated_mapping_is_four_fields(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_a_validated_mapping_is_four_fields(client: TestClient, icd10se_embedded: str) -> None:
     """The output contract: system, version, code, decision_id -- nothing more.
 
     Free text stays local; only this is fit to cross a boundary.
@@ -212,9 +202,7 @@ def test_a_second_decision_is_refused(client: TestClient, icd10se_embedded: str)
     assert fetched["decision"]["validator_id"] == "a"
 
 
-def test_correct_rejects_a_malformed_code(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_correct_rejects_a_malformed_code(client: TestClient, icd10se_embedded: str) -> None:
     proposal = _map(client)
     response = client.post(
         "/decisions",
@@ -248,9 +236,7 @@ def test_correct_rejects_a_code_absent_from_the_loaded_version(
     assert "does not exist in version" in response.json()["detail"]
 
 
-def test_correct_without_a_code_is_refused(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_correct_without_a_code_is_refused(client: TestClient, icd10se_embedded: str) -> None:
     proposal = _map(client)
     response = client.post(
         "/decisions",
@@ -293,9 +279,7 @@ def test_accepting_a_different_code_must_be_called_a_correction(
     assert "use 'correct'" in response.json()["detail"]
 
 
-def test_decision_on_an_unknown_proposal_is_404(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_decision_on_an_unknown_proposal_is_404(client: TestClient, icd10se_embedded: str) -> None:
     response = client.post(
         "/decisions",
         json={"proposal_id": str(uuid.uuid4()), "decision": "reject", "validator_id": "c"},
@@ -303,13 +287,9 @@ def test_decision_on_an_unknown_proposal_is_404(
     assert response.status_code == 404
 
 
-def test_decision_requires_a_validator_id(
-    client: TestClient, icd10se_embedded: str
-) -> None:
+def test_decision_requires_a_validator_id(client: TestClient, icd10se_embedded: str) -> None:
     proposal = _map(client)
-    response = client.post(
-        "/decisions", json={"proposal_id": proposal["id"], "decision": "reject"}
-    )
+    response = client.post("/decisions", json={"proposal_id": proposal["id"], "decision": "reject"})
     assert response.status_code == 422
 
 

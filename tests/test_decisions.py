@@ -48,16 +48,12 @@ def proposal_id(db_session: Session, icd10se_embedded: str) -> uuid.UUID:
 def test_accept_uses_the_proposals_own_suggestion(
     db_session: Session, proposal_id: uuid.UUID
 ) -> None:
-    row = record_decision(
-        db_session, proposal_id=proposal_id, decision="accept", validator_id="c"
-    )
+    row = record_decision(db_session, proposal_id=proposal_id, decision="accept", validator_id="c")
     assert row.decision == "accept"
     assert row.final_code == "I10"
 
 
-def test_resolution_is_derived_not_stored(
-    db_session: Session, proposal_id: uuid.UUID
-) -> None:
+def test_resolution_is_derived_not_stored(db_session: Session, proposal_id: uuid.UUID) -> None:
     """A proposal is resolved because a decision references it -- never because
     a flag was flipped. A flag would need an UPDATE, which the trigger forbids.
     """
@@ -78,9 +74,7 @@ def test_resolution_is_derived_not_stored(
 def test_second_decision_is_refused(db_session: Session, proposal_id: uuid.UUID) -> None:
     record_decision(db_session, proposal_id=proposal_id, decision="accept", validator_id="a")
     with pytest.raises(DecisionConflict, match="already been decided"):
-        record_decision(
-            db_session, proposal_id=proposal_id, decision="reject", validator_id="b"
-        )
+        record_decision(db_session, proposal_id=proposal_id, decision="reject", validator_id="b")
 
 
 def test_correct_requires_a_valid_and_existing_code(
@@ -117,9 +111,7 @@ def test_correct_normalises_case(db_session: Session, proposal_id: uuid.UUID) ->
 
 def test_unknown_proposal(db_session: Session, icd10se_embedded: str) -> None:
     with pytest.raises(ProposalNotFound):
-        record_decision(
-            db_session, proposal_id=uuid.uuid4(), decision="reject", validator_id="c"
-        )
+        record_decision(db_session, proposal_id=uuid.uuid4(), decision="reject", validator_id="c")
 
 
 def test_accept_is_impossible_without_a_suggestion(

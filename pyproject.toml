@@ -50,6 +50,11 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "C4", "RUF"]
 ignore = [
     # Swedish identifiers and terminology strings legitimately contain non-ASCII.
     "RUF001", "RUF002", "RUF003",
+    # N818 wants every exception name to end in "Error". TerminologyLicenceRequired
+    # is named by the specification, and the domain exceptions read better as the
+    # condition they describe (DecisionConflict, ProposalNotFound). Applying the
+    # rule to some and not others would be worse than not applying it.
+    "N818",
 ]
 
 [tool.mypy]
