@@ -1,304 +1,355 @@
 # Medical Terminology Mapper
 
-An auditable, AI-assisted workflow for mapping free-text clinical terms
-to Swedish standardized code systems.
+A tool that helps a person turn free-text clinical wording into a suggested
+standard medical code. The system proposes. A person decides. Every decision is
+recorded so it can be checked later.
 
-Python · FastAPI · PostgreSQL/pgvector · RAG · LLM reranking · ICD-10-SE · KVÅ · (SNOMED CT via adapter)
-
-> **Designed for human validation — not autonomous clinical coding.**
-> The system proposes; a person decides. No mapping is ever final without a
-> recorded human decision, and every decision is permanent and traceable.
+The project supports Swedish code systems: **ICD-10-SE** (diagnoses) and **KVÅ**
+(healthcare procedures).
 
 ---
 
-## Why it works this way
+## Why this project exists
 
-In Swedish healthcare, diagnosis and procedure codes feed statistics,
-reimbursement, and the patient record. A tool that silently assigns codes is a
-liability. A tool that makes an expert faster **and leaves a trail** is what
-actually gets adopted.
+In healthcare, the same thing can be written in many ways.
 
-Everything in the design follows from that: proposals and decisions are
-append-only at the database level, every proposal stores the exact candidates
-and scores it was built from along with the provider, model and a hash of the
-prompt file, and no code path can mark a mapping accepted without a human
-decision row.
-
----
-
-## How it works
+A clinician may write:
 
 ```
-"högt blodtryck"
-   │
-   ▼
-normalize ─────────────► NFC · casefold · punctuation · whitespace
-   │                     (å ä ö preserved; no stemming — see ARCHITECTURE.md)
-   ├───────────────┬──────────────────┐
-   ▼               ▼                  │
-lexical          vector               │  both scoped to one
-FTS('swedish')   pgvector             │  (system, version)
-+ pg_trgm        cosine               │
-   └───────┬───────┘                  │
-           ▼                          │
-        merge  ── reciprocal-rank fusion · dedupe · cap
-           │
-           ▼
-   retrieval gate ──── not enough evidence ──► no_good_match, LLM never called
-           │
-           ▼
-      LLM rerank ─► strict JSON ─► one repair retry ─► hallucinated-code guard
-           │
-           ▼
-       PROPOSAL     pending | rerank_failed | no_good_match     ← append-only
-           │
-           ▼
-    HUMAN DECISION       accept | reject | correct              ← append-only
-           │                                                       exactly one
-           ▼
-   validated mapping  =  (system, version, code, decision_id)
+högt blodtryck
 ```
 
-The last line is the whole output contract. Free text stays local; only those
-four fields are fit to cross an organisational boundary.
+Another system, a report, or a colleague may need the standard code:
+
+```
+ICD-10-SE I10
+```
+
+Free text is good for clinical detail. It carries nuance, doubt and context that
+a code cannot. Standard codes are good for something else: they make information
+easier to reuse, compare, report and exchange between systems and organisations.
+
+**This project does not ask anyone to stop writing free text.** Clinical notes
+stay as they are. The structured code is an additional result, produced
+alongside the text, not a replacement for it.
+
+Finding the right code by hand takes time. There are roughly 39 000 ICD-10-SE
+codes and about 11 900 KVÅ codes. This project helps a reviewer find a likely
+code faster, and keeps a clear record of what was decided and why.
 
 ---
 
-## Quick start
+## The basic idea
 
-Runs end to end with **no API keys and no network** — the bundled deterministic
-providers stand in for embeddings and the LLM.
+```
+Clinical text
+      ↓
+Search likely codes
+      ↓
+Rank the candidates
+      ↓
+A person reviews
+      ↓
+Accept / reject / correct
+      ↓
+Validated mapping
+```
+
+1. **Clinical text** — someone types a word or phrase, for example
+   `högt blodtryck`.
+2. **Search likely codes** — the system searches the selected code system for
+   entries that look like a match, including matches with small spelling
+   mistakes.
+3. **Rank the candidates** — a language model puts the most likely candidates
+   first and writes one short sentence explaining each one.
+4. **A person reviews** — the suggestion and the evidence behind it are shown on
+   one page.
+5. **Accept / reject / correct** — the reviewer chooses.
+6. **Validated mapping** — the recorded result.
+
+---
+
+## The human is always responsible for the final decision
+
+This is the most important part of the project.
+
+- The system **never** assigns a final code on its own.
+- Every accepted mapping requires a **recorded human decision**.
+- **Rejecting** a suggestion is a valid, recorded outcome.
+- **Correcting** it to a different code is a valid, recorded outcome.
+- **"No good match"** is a valid, recorded outcome.
+- Proposals and decisions are stored **append-only**: once written, they cannot
+  be edited or deleted, not even directly in the database. If a mapping turns
+  out to be wrong, the answer is a new proposal and a new decision, not a
+  rewritten old one.
+
+A suggestion by itself is not a mapping. It only becomes one when a person has
+decided.
+
+---
+
+## Example
+
+Input:
+
+```
+högt blodtryck
+```
+
+Possible proposal:
+
+```
+ICD-10-SE I10 — Essentiell hypertoni
+```
+
+The reviewer then accepts, rejects, or corrects it.
+
+If the reviewer accepts, the final validated result is exactly four fields:
+
+| Field | Example |
+| --- | --- |
+| System | `icd10se` |
+| Version | `2026` |
+| Code | `I10` |
+| Decision ID | `6106c873-4bb4-…` |
+
+The proposal and the validated result are **not the same thing**. The proposal
+is what the system suggested. The validated result is what a person confirmed,
+and it is the only output meant to be used elsewhere.
+
+---
+
+## When the system is unsure
+
+Search will always return *something*. That is a problem, because the closest
+match to an unrelated word is still a medical code.
+
+During manual testing, the word `banan` (banana) produced a diabetes code, shown
+with a confident-looking score. There was no real evidence behind it. That is
+the most dangerous kind of wrong answer, because on screen it looks exactly like
+a correct one.
+
+The system now checks the strength of the search evidence **before** asking the
+language model to rank anything. If the evidence is too weak:
+
+- no code is suggested,
+- the language model is not called at all,
+- the result is recorded as **no good match**,
+- the candidates that were found are still shown, so the reviewer can judge for
+  themselves.
+
+The reviewer can then confirm that no code applies, or enter the correct code
+manually.
+
+The rule used for this check is an **engineering safeguard**, measured on the
+development data available for this project. It is **not** a clinically
+validated threshold and does not represent a proven medical accuracy boundary.
+The rule is versioned, configurable, and stored with every proposal, so it can
+be re-measured and adjusted. The technical detail and the measurements are in
+[ARCHITECTURE.md](ARCHITECTURE.md).
+
+---
+
+## Code systems currently supported
+
+### ICD-10-SE — Swedish diagnosis classification
+
+The loader reads the official file formats (`.tsv` and `.xlsx`).
+
+**Important limitation, stated openly:** this repository contains only a small
+**sample excerpt** of ICD-10-SE for development and testing. At the time of
+writing, a complete machine-readable ICD-10-SE file was **not publicly
+obtainable**, so the loader has not been verified at full scale against a real
+release. The file format was implemented from the publisher's own format
+description. See [PHASE1_REPORT.md](PHASE1_REPORT.md).
+
+### KVÅ — Swedish classification of healthcare procedures
+
+The loader has been **verified locally against the real 2026 KVÅ workbook**. It
+read all 11 888 codes, matching the count stated in the file itself.
+
+The real workbook is **not** included in this repository. You download it
+yourself.
+
+### SNOMED CT
+
+**Interface only.** There is an adapter so SNOMED CT can be added later without
+restructuring the project. There is no SNOMED CT content and no working loader.
+SNOMED CT requires a licence.
+
+Where the official files come from, who publishes them, and under what terms is
+documented in [LICENSING.md](LICENSING.md).
+
+---
+
+## What this project does **not** do
+
+- It does **not** replace clinical judgement.
+- It does **not** perform autonomous clinical coding.
+- It does **not** guarantee medical correctness.
+- It does **not** contain the full official terminology datasets.
+- It has **no** user accounts, login, or access control. The reviewer's name is
+  a free-text field, so the record shows a *claimed* identity only.
+- It is **not** hardened for production deployment.
+- It does **not** integrate with any external exchange layer yet.
+- It does **not** include the work deferred to later phases (see
+  [Project status](#project-status)).
+
+---
+
+## Why the audit trail matters
+
+If someone reviews a mapping months later, they should be able to answer simple
+questions without guesswork:
+
+- What text was entered?
+- Which candidate codes were considered, and how strong was each match?
+- Which system or model produced the ranking, and with which instructions?
+- What did the system suggest?
+- Who made the final decision, and what did they decide?
+- When was it decided?
+
+Each proposal stores all of this, including a fingerprint of the exact
+instructions given to the language model. If those instructions are edited
+later, the fingerprint changes, so a change in behaviour cannot pass unnoticed.
+
+Records cannot be edited or deleted afterwards.
+
+---
+
+## Running it locally
+
+You need [Docker](https://www.docker.com/) and Git. Nothing else, and no AI
+account.
+
+**1. Get the code**
 
 ```bash
-git clone <this repo> && cd medical-terminology-mapper
-cp .env.example .env          # defaults are the offline fakes
+git clone https://github.com/abdulwahed-sweden/medical-terminology-mapper.git
+cd medical-terminology-mapper
+```
 
+**2. Create your settings file**
+
+```bash
+cp .env.example .env
+```
+
+The defaults work offline. If port 5432 is already used on your machine, change
+`DB_PORT` in `.env`.
+
+**3. Start it**
+
+```bash
 docker compose up -d
-docker compose exec app alembic upgrade head
+```
 
-# Load the sample fixtures (SAMPLE DATA — see LICENSING.md)
+**4. Prepare the database**
+
+```bash
+docker compose exec app alembic upgrade head
+```
+
+**5. Load the sample data**
+
+```bash
 docker compose exec app python scripts/load_terminology.py \
     --system icd10se --version 2026-sample \
     --file tests/fixtures/icd10se_sample.txt
 
-docker compose exec app python scripts/load_terminology.py \
-    --system kva --version 2026-sample \
-    --file tests/fixtures/kva_kka_sample.txt \
-    --file tests/fixtures/kva_kma_sample.txt
-
-# Compute embeddings (fake provider: deterministic, offline)
 docker compose exec app python scripts/embed_terminology.py \
     --system icd10se --version 2026-sample --provider fake
+```
+
+**6. Open it**
+
+Go to <http://localhost:8000> and try `högt blodtryck`.
+
+To stop everything: `docker compose down`.
+
+### Loading the real terminology
+
+Download the official files yourself, then:
+
+```bash
+# KVÅ (published as one spreadsheet containing both parts)
+docker compose exec app python scripts/load_terminology.py \
+    --system kva --version 2026 --file kva-inkl-beskrivningstexter-2026.xlsx
+
 docker compose exec app python scripts/embed_terminology.py \
-    --system kva --version 2026-sample --provider fake
+    --system kva --version 2026 --provider fake
 ```
 
-Open **<http://localhost:8000/>**, type `högt blodtryck`, and validate the
-proposal. API docs are at `/docs`.
+Downloaded terminology files are excluded from version control on purpose.
 
-> **Port 5432 already in use?** Set `DB_PORT` in `.env` to something free (and
-> match the port in `DATABASE_URL`). The compose file publishes
-> `${DB_PORT:-5432}`.
+---
 
-### What the pieces do
+## Offline mode
 
-| Endpoint | Purpose |
+By default the project runs with **deterministic test providers**. They need no
+internet connection and no API key, which makes the whole system easy to run and
+easy to test.
+
+**These are development and test stand-ins. They are not real clinical AI
+models, and they do not understand language.** One sorts candidates by text
+similarity; the other turns text into numbers using a fixed formula.
+
+Because of this, the interface **never shows a confidence number in offline
+mode**. Showing one would suggest a judgement that was never made. Instead the
+page displays a clear test-mode banner, so a screenshot cannot be mistaken for a
+real result.
+
+---
+
+## Using real AI providers
+
+Real language-model and text-embedding providers are supported through
+configuration. The application code does not depend on any single vendor: any
+service that follows a common API shape can be used, including one you host
+yourself. Where clinical text is allowed to travel is a governance decision, so
+this is a setting rather than a code change.
+
+See [`.env.example`](.env.example) for the available options.
+
+---
+
+## Project status
+
+**Phase 1: complete and ready for review.**
+
+Verified before publication: the full test suite (284 tests; 2 are skipped
+when no AI provider key is present), code linting,
+formatting, strict type checking, database migrations from an empty database,
+Docker startup, sample and real KVÅ loading, the "no good match" behaviour, and
+the append-only protections.
+
+This is **not** a production system and it is **not** clinically validated. No
+accuracy figures are published, because a meaningful figure requires a
+carefully prepared reference set that does not yet exist. The project includes
+the measuring tool, not a result.
+
+Deferred to later phases: a second machine-readable interface, a comparative
+retrieval benchmark, SNOMED CT content, integration with an external exchange
+layer, and user authentication.
+
+---
+
+## Documentation
+
+| Document | What it covers |
 | --- | --- |
-| `POST /map` | Create a proposal. Never a mapping. |
-| `GET /proposals/{id}` | The proposal, its evidence, and its decision if one exists. |
-| `POST /decisions` | Record the human decision. One per proposal, permanently. |
-| `GET /` | The validator page. |
-| `GET /health` | Liveness, plus the hash of the prompt this instance is running. |
-
-### The guarantee, demonstrated
-
-```console
-$ docker compose exec db psql -U mtm -d mtm -c "UPDATE decisions SET final_code='I15.9';"
-ERROR:  append-only table: UPDATE is not permitted on public.decisions
-
-$ docker compose exec db psql -U mtm -d mtm -c "DELETE FROM proposals;"
-ERROR:  append-only table: DELETE is not permitted on public.proposals
-```
-
-Enforced by a database trigger, not by application code — a future maintainer
-with `psql` can bypass any amount of careful Python.
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Technical design, decisions, and known limitations |
+| [PHASE1_REPORT.md](PHASE1_REPORT.md) | What was built, what was assumed, and open questions |
+| [LICENSING.md](LICENSING.md) | Where terminology files come from and how they may be used |
+| [docs/MANUAL_UI_TEST.md](docs/MANUAL_UI_TEST.md) | Manual checklist for testing the web page |
 
 ---
 
-## Loading real terminology
+## Licence
 
-**No terminology content ships with this repository.** Download the official
-files yourself; see [LICENSING.md](LICENSING.md) for where they come from, who
-publishes them (responsibility moved from Socialstyrelsen to
-E-hälsomyndigheten on 1 June 2026), and under what terms.
+The **software** in this repository is released under the MIT licence — see
+[LICENSE](LICENSE).
 
-Both loaders read **`.xlsx` and `.tsv`**, dispatching on the file extension —
-which format a given classification is published in has changed over time and
-differs between the two.
-
-```bash
-# KVÅ — published as a single workbook holding both KKÅ and KMÅ
-python scripts/load_terminology.py --system kva --version 2026 \
-    --file kva-inkl-beskrivningstexter-2026.xlsx
-
-# KVÅ from the tab-separated code-text files instead: two files, one release,
-# passed in a single command so they land as one version
-python scripts/load_terminology.py --system kva --version 2026 \
-    --file KKA_2026.tsv --file KMA_2026.tsv
-
-# ICD-10-SE — one code-text file, either format
-python scripts/load_terminology.py --system icd10se --version 2026 --file ICD10SE_2026.tsv
-
-# Embeddings, once per (system, version, provider, model)
-python scripts/embed_terminology.py --system icd10se --version 2026 \
-    --provider openai_compat --model text-embedding-3-small
-```
-
-Loading a version **replaces** that whole `(system, version)` slice, so a code
-withdrawn between two loads does not linger. Several versions coexist; every
-proposal records which one it was computed against.
-
-Headers are matched tolerantly — case, whitespace, dash variants and diacritics
-are folded, and unknown columns are ignored — so an added column in a future
-release will not break a load, and a *missing required* column fails loudly
-naming the headers it saw. For workbooks the header row is located by search,
-so a metadata sheet (the KVÅ workbook opens with `Läs mig`) or a title row above
-the header is handled.
-
-> **The published KVÅ workbook has no `Överordnad kod` column.** Loading KVÅ
-> from it therefore yields no parent links: `chapter` is empty and every concept
-> is a leaf. That is a property of the source, not a parsing bug; the loader
-> logs `classification_source_has_no_parent_column` so it cannot pass unnoticed.
-> The `.tsv` distribution does carry parent links.
-
-### Using real providers
-
-```bash
-LLM_PROVIDER=anthropic
-LLM_MODEL=claude-opus-5
-ANTHROPIC_API_KEY=sk-ant-...
-
-EMBEDDING_PROVIDER=openai_compat
-EMBEDDING_MODEL=text-embedding-3-small
-EMBEDDING_DIM=1536              # changing this needs a migration (pgvector is fixed-width)
-OPENAI_EMBEDDINGS_BASE_URL=https://api.openai.com/v1
-OPENAI_API_KEY=...
-```
-
-Both provider families sit behind protocols, and the OpenAI-compatible clients
-take a `base_url` — so Azure, a self-hosted vLLM or Ollama, or a regional
-service all work without a code change. For clinical text, where the text is
-allowed to travel is a governance decision, not a code change.
-
-Every setting is listed with a comment in [`.env.example`](.env.example).
-
----
-
-## Evaluation
-
-**This repository publishes no accuracy figures.** A figure is only meaningful
-against a gold set curated with the official coding guidance, and that curation
-is the author's work, not the tool's. What ships is the instrument.
-
-```bash
-python evaluation/run_eval.py \
-    --gold evaluation/gold/your_gold_set.csv \
-    --system icd10se --version 2026 --provider anthropic
-```
-
-Build a gold set from [`evaluation/gold/TEMPLATE.csv`](evaluation/gold/TEMPLATE.csv):
-
-```
-term,target_system,expected_code,source,note
-```
-
-The `source` column is not optional — an unsourced gold set measures nothing.
-
-The script reports **Top-1 accuracy**, **Top-3 recall**, mean retrieval and
-rerank latency, and writes a per-row misses CSV. That CSV also says whether the
-expected code was retrieved at all, which separates a *retrieval* failure from a
-*ranking* failure — they are fixed in different places.
-
-A twelve-row sample gold set is included so the script runs out of the box. It
-is marked `SAMPLE ONLY`: a dozen easy terms against a 25-concept fixture, which
-measures nothing about mapping quality. Running it prints a loud banner to that
-effect — one for the sample gold set, one for each fake provider in use. That
-is exactly the situation the banners exist for.
-
----
-
-## Development
-
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -e ".[dev]"
-
-docker compose up -d db
-export DATABASE_URL=postgresql+psycopg://mtm:mtm@localhost:5432/mtm
-
-pytest                # 282 tests
-ruff check . && ruff format --check .
-mypy app/             # strict
-```
-
-`docs/MANUAL_UI_TEST.md` is a ten-minute manual pass over the validator page.
-
-Tests run against a **real PostgreSQL**, never SQLite: the append-only trigger,
-the `swedish` text-search configuration, `pg_trgm` and pgvector are the subject
-under test, not an implementation detail. Database-backed tests skip with an
-explanatory message if no server is reachable, and live provider tests skip
-unless an API key is present — a clone with no credentials still gets a green
-suite.
-
----
-
-## Design decisions
-
-The reasoning behind the architecture, the trade-offs taken, and an honest list
-of limitations are in **[ARCHITECTURE.md](ARCHITECTURE.md)**. Highlights:
-
-- Append-only enforced by a **database trigger**, and resolution derived by
-  join rather than stored as a mutable flag.
-- A **retrieval gate** refuses to call the model when the evidence is not there:
-  nonsense input returns *no good match*, not a confident wrong code.
-- **No confidence is shown when a stand-in produced the ranking** — the number
-  is suppressed, not merely caveated.
-- Exclusion terms (`Utesluter`) are **never** indexed as synonyms — doing so
-  would make `I21` retrievable by the phrase that rules it out.
-- `word_similarity` rather than `similarity`, because plain trigram similarity
-  penalises richly-described concepts.
-- Codes the model returns that were not in the candidate list are **dropped and
-  logged**, never shown to a human.
-- The prompt file is **hashed per proposal**, so behaviour cannot change
-  invisibly.
-- The publisher's **descriptions are indexed at the lowest weight**, which
-  recovers real retrieval misses at no measured precision cost.
-- Deterministic fake providers make the whole pipeline reproducible — and say
-  plainly in their own docstrings that they do no language understanding.
-
----
-
-## Roadmap
-
-| Phase | Scope | Status |
-| --- | --- | --- |
-| **1** | ICD-10-SE + KVÅ, hybrid retrieval, LLM rerank, human validation, audit | **this repository** |
-| 2 | `terminology-mcp` — a second surface over the same adapters | not started |
-| 3 | Comparative benchmark: lexical vs embeddings vs RAG+LLM | not started |
-| 4 | SNOMED CT loader (requires an affiliate licence) | interface only |
-| 5 | Boundary integration for validated mappings | not started |
-
-See [PHASE1_REPORT.md](PHASE1_REPORT.md) for what was built, what had to be
-assumed, and the open questions.
-
----
-
-## Licensing
-
-Code: MIT, see [LICENSE](LICENSE).
-
-**Terminology content is not included and is not covered by that licence.**
-ICD-10-SE and KVÅ are published by the Swedish authorities; SNOMED CT requires
-an affiliate licence. ICD-10-SE is **not** ICD-10-CM, and US tooling must not be
-assumed compatible. Full detail, with the date checked, in
-**[LICENSING.md](LICENSING.md)**.
+This covers the code only. It gives no rights to ICD-10-SE, KVÅ, SNOMED CT, or
+any other terminology, none of which are included here. Terminology licensing is
+a separate matter, described in [LICENSING.md](LICENSING.md).
