@@ -35,7 +35,10 @@ class RankedCodeOut(BaseModel):
 
     code: str
     preferred_term: str | None = None
-    model_confidence: float
+    # Null whenever the reranking was done by the deterministic stand-in: it has
+    # no confidence to report, and a number that looks like one would be
+    # screenshotted without its caveat.
+    model_confidence: float | None = None
     reason: str
 
 
@@ -63,13 +66,26 @@ class ValidatedMapping(BaseModel):
     decision_id: uuid.UUID
 
 
+class GateOut(BaseModel):
+    """The retrieval gate's verdict, so "nothing was found" stays checkable."""
+
+    id: str
+    version: str
+    fired: bool
+    reason: str | None = None
+    values: dict[str, Any] = Field(default_factory=dict)
+
+
 class ProposalOut(BaseModel):
     model_config = _ALLOW_MODEL_PREFIX
 
     id: uuid.UUID
     trace_id: str
     created_at: dt.datetime
-    status: Literal["pending", "rerank_failed"]
+    status: Literal["pending", "rerank_failed", "no_good_match"]
+    # "fake" means a deterministic stand-in produced the ranking.
+    provider_kind: Literal["fake", "live"] = "live"
+    gate: GateOut | None = None
 
     input_text: str
     normalized_text: str

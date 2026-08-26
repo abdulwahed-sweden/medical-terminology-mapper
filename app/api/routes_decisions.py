@@ -13,6 +13,7 @@ from app.audit.writer import get_proposal
 from app.models.api import DecisionRequest, ProposalOut
 from app.validation.decisions import (
     DecisionConflict,
+    DecisionNotApplicable,
     InvalidDecision,
     ProposalNotFound,
     record_decision,
@@ -61,6 +62,8 @@ def create_decision(payload: DecisionRequest, session: SessionDep) -> ProposalOu
     except ProposalNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except DecisionConflict as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except DecisionNotApplicable as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except InvalidDecision as exc:
         raise HTTPException(HTTP_422_UNPROCESSABLE, detail=str(exc)) from exc

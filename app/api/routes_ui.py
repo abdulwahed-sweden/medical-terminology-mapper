@@ -12,6 +12,7 @@ from app.api.deps import SessionDep, SettingsDep
 from app.db.models import loaded_versions
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).resolve().parents[2] / "templates"))
+APP_VERSION = "0.1.0"
 
 router = APIRouter(include_in_schema=False)
 
@@ -32,5 +33,15 @@ def validator_page(request: Request, session: SessionDep, settings: SettingsDep)
             "llm_model": settings.llm_model,
             "embedding_provider": settings.embedding_provider,
             "embedding_model": settings.embedding_model,
+            # Either stand-in puts the page in test mode: the banner is about
+            # whether the numbers on screen mean anything, and a fake embedder
+            # makes the vector column meaningless just as a fake reranker makes
+            # the confidence meaningless.
+            "provider_kind": (
+                "fake"
+                if settings.llm_provider == "fake" or settings.embedding_provider == "fake"
+                else "live"
+            ),
+            "app_version": APP_VERSION,
         },
     )

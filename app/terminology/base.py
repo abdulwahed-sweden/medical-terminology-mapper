@@ -62,6 +62,10 @@ class Concept(BaseModel):
     parent_code: str | None = None
     is_leaf: bool
     chapter: str | None = None
+    # The publisher's Beskrivning: prose explaining what the code covers. Kept
+    # apart from `synonyms` because it is not a name for the concept -- it is
+    # indexed at a lower weight, and never used as a display term.
+    description: str = ""
 
 
 @runtime_checkable
@@ -371,5 +375,14 @@ def _root_of(concept: Concept, by_code: Mapping[str, Concept]) -> str | None:
 
 
 def build_search_text(concept: Concept) -> str:
-    """The single string both lexical signals index: preferred term + synonyms."""
+    """The names of a concept: preferred term plus synonyms.
+
+    This is what trigram similarity compares against. Descriptions are
+    deliberately excluded here: trigram matching exists to survive a misspelled
+    *name*, and running it over prose produces noise rather than tolerance.
+    """
     return " ".join([concept.preferred_term, *concept.synonyms]).strip()
+
+
+def build_synonym_text(concept: Concept) -> str:
+    return " ".join(concept.synonyms).strip()

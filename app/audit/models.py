@@ -16,6 +16,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     Float,
@@ -32,7 +33,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
 
-PROPOSAL_STATUSES = ("pending", "rerank_failed")
+PROPOSAL_STATUSES = ("pending", "rerank_failed", "no_good_match")
 DECISION_KINDS = ("accept", "reject", "correct")
 
 
@@ -69,6 +70,20 @@ class ProposalRow(Base):
 
     embedding_provider: Mapped[str] = mapped_column(String(32), nullable=False)
     embedding_model: Mapped[str] = mapped_column(String(128), nullable=False)
+
+    # Whether the reranking was done by a real model or by the deterministic
+    # stand-in. Recorded so a stored confidence can never be mistaken for one a
+    # model actually produced.
+    provider_kind: Mapped[str] = mapped_column(String(8), nullable=False, default="live")
+
+    # The retrieval gate. "The system found nothing" is a claim, and it has to
+    # be checkable later in the same way the prompt hash makes reranking
+    # checkable -- so the rule that ran, its version, its verdict, and the
+    # actual values it judged are all stored, on every proposal.
+    gate_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    gate_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    gate_fired: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    gate_values: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     latency_ms_retrieval: Mapped[int] = mapped_column(Integer, nullable=False)
     latency_ms_rerank: Mapped[int] = mapped_column(Integer, nullable=False)

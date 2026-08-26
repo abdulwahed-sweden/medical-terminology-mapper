@@ -44,10 +44,13 @@ FTS('swedish')   pgvector             │  (system, version)
         merge  ── reciprocal-rank fusion · dedupe · cap
            │
            ▼
+   retrieval gate ──── not enough evidence ──► no_good_match, LLM never called
+           │
+           ▼
       LLM rerank ─► strict JSON ─► one repair retry ─► hallucinated-code guard
            │
            ▼
-       PROPOSAL          status: pending | rerank_failed        ← append-only
+       PROPOSAL     pending | rerank_failed | no_good_match     ← append-only
            │
            ▼
     HUMAN DECISION       accept | reject | correct              ← append-only
@@ -233,10 +236,12 @@ pip install -e ".[dev]"
 docker compose up -d db
 export DATABASE_URL=postgresql+psycopg://mtm:mtm@localhost:5432/mtm
 
-pytest                # 192 tests
+pytest                # 282 tests
 ruff check . && ruff format --check .
 mypy app/             # strict
 ```
+
+`docs/MANUAL_UI_TEST.md` is a ten-minute manual pass over the validator page.
 
 Tests run against a **real PostgreSQL**, never SQLite: the append-only trigger,
 the `swedish` text-search configuration, `pg_trgm` and pgvector are the subject
@@ -254,6 +259,10 @@ of limitations are in **[ARCHITECTURE.md](ARCHITECTURE.md)**. Highlights:
 
 - Append-only enforced by a **database trigger**, and resolution derived by
   join rather than stored as a mutable flag.
+- A **retrieval gate** refuses to call the model when the evidence is not there:
+  nonsense input returns *no good match*, not a confident wrong code.
+- **No confidence is shown when a stand-in produced the ranking** — the number
+  is suppressed, not merely caveated.
 - Exclusion terms (`Utesluter`) are **never** indexed as synonyms — doing so
   would make `I21` retrievable by the phrase that rules it out.
 - `word_similarity` rather than `similarity`, because plain trigram similarity
@@ -262,6 +271,8 @@ of limitations are in **[ARCHITECTURE.md](ARCHITECTURE.md)**. Highlights:
   logged**, never shown to a human.
 - The prompt file is **hashed per proposal**, so behaviour cannot change
   invisibly.
+- The publisher's **descriptions are indexed at the lowest weight**, which
+  recovers real retrieval misses at no measured precision cost.
 - Deterministic fake providers make the whole pipeline reproducible — and say
   plainly in their own docstrings that they do no language understanding.
 

@@ -63,6 +63,11 @@ class KVA:
             if title is None:
                 continue
             parent = next((row["parent"] for row in rows if row.get("parent")), None)
+            # Beskrivning is prose, not a name: carried separately so it can be
+            # indexed at a lower weight and never shown as a term.
+            description = " ".join(
+                dict.fromkeys(row["description"] for row in rows if row.get("description"))
+            )
             concepts.append(
                 Concept(
                     system="kva",
@@ -73,6 +78,7 @@ class KVA:
                     parent_code=parent,
                     is_leaf=True,
                     chapter=None,
+                    description=description,
                 )
             )
         return assign_hierarchy(concepts)

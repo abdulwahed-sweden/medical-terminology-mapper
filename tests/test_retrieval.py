@@ -351,3 +351,126 @@ def test_full_retrieval_path_merges_both_stages(
     assert merged[0].sources == ["lexical", "vector"]
     # Vector-only candidates the lexical stage never saw are still present.
     assert any(c.sources == ["vector"] for c in merged)
+
+
+# ------------------------------------------------- field attribution
+
+
+def test_matched_field_attributes_a_title_hit(db_session: Session, icd10se_loaded: str) -> None:
+    results = lexical_search(
+        db_session,
+        query="astma",
+        system="icd10se",
+        version=icd10se_loaded,
+        top_k=5,
+        trigram_threshold=SETTINGS.trigram_threshold,
+    )
+    assert results[0].code == "J45"
+    assert results[0].matched_field == "title"
+
+
+def test_matched_field_attributes_a_synonym_hit(db_session: Session, icd10se_loaded: str) -> None:
+    """ "Högt blodtryck" is an Innefattar term on I10, not its preferred term."""
+    results = lexical_search(
+        db_session,
+        query=normalize("högt blodtryck").normalized,
+        system="icd10se",
+        version=icd10se_loaded,
+        top_k=10,
+        trigram_threshold=SETTINGS.trigram_threshold,
+    )
+    i10 = next(c for c in results if c.code == "I10")
+    assert i10.matched_field in {"title", "synonym"}
+
+
+def test_strict_similarity_is_reported(db_session: Session, icd10se_loaded: str) -> None:
+    """The gate reads this separately from ts_rank, so it must be populated."""
+    results = lexical_search(
+        db_session,
+        query="hjartinfarkt",
+        system="icd10se",
+        version=icd10se_loaded,
+        top_k=5,
+        trigram_threshold=SETTINGS.trigram_threshold,
+    )
+    assert results
+    assert results[0].strict_similarity is not None
+    assert results[0].strict_similarity > 0.6
+    assert results[0].ts_rank == 0.0  # a misspelling has no full-text match
+
+
+def test_strict_word_similarity_rejects_a_mid_word_extent(
+    db_session: Session, kva_loaded: str
+) -> None:
+    """The reason for `strict_word_similarity`.
+
+    Plain `word_similarity` matched "banan" against "An*nan ban*dnings..." at
+    0.833 on the real release, above a legitimate misspelling. The strict
+    variant requires word boundaries.
+    """
+    results = lexical_search(
+        db_session,
+        query="banan",
+        system="kva",
+        version=kva_loaded,
+        top_k=10,
+        trigram_threshold=SETTINGS.trigram_threshold,
+    )
+    assert all((c.strict_similarity or 0.0) < 0.6 for c in results)
+
+
+# ------------------------------------- description indexing (the PTCA cases)
+
+
+def test_description_term_retrieves_its_code(db_session: Session, kva_loaded: str) -> None:
+    """FNG02's title is "Perkutan transluminal koronarangioplastik (PTCA)".
+
+    "ballongdilatation" appears only in its Beskrivning. Before descriptions
+    were indexed this was a retrieval miss, and no reranking could recover it.
+    """
+    results = lexical_search(
+        db_session,
+        query="ballongdilatation",
+        system="kva",
+        version=kva_loaded,
+        top_k=15,
+        trigram_threshold=SETTINGS.trigram_threshold,
+        index_descriptions=True,
+    )
+    hit = next((c for c in results if c.code == "FNG02"), None)
+    assert hit is not None
+    assert hit.matched_field == "description"
+
+
+def test_description_term_misses_when_descriptions_are_off(
+    db_session: Session, kva_loaded: str
+) -> None:
+    results = lexical_search(
+        db_session,
+        query="ballongdilatation",
+        system="kva",
+        version=kva_loaded,
+        top_k=15,
+        trigram_threshold=SETTINGS.trigram_threshold,
+        index_descriptions=False,
+    )
+    assert all(c.code != "FNG02" for c in results)
+
+
+@pytest.mark.parametrize("query", ["PTCA", "koronarangioplastik"])
+def test_title_terms_find_the_code_either_way(
+    db_session: Session, kva_loaded: str, query: str
+) -> None:
+    """Turning descriptions on must not disturb what already worked."""
+    for descriptions in (True, False):
+        results = lexical_search(
+            db_session,
+            query=normalize(query).normalized,
+            system="kva",
+            version=kva_loaded,
+            top_k=15,
+            trigram_threshold=SETTINGS.trigram_threshold,
+            index_descriptions=descriptions,
+        )
+        assert results[0].code == "FNG02", (query, descriptions)
+        assert results[0].matched_field == "title"

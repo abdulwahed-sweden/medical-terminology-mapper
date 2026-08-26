@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+import sqlalchemy as sa
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
@@ -27,7 +28,7 @@ from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.config import get_settings
 from app.db.base import Base
-from app.terminology.base import Concept, build_search_text
+from app.terminology.base import Concept, build_search_text, build_synonym_text
 
 
 class ConceptRow(Base):
@@ -50,10 +51,16 @@ class ConceptRow(Base):
     is_leaf: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     chapter: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
-    # Denormalised "preferred term + synonyms" used by both lexical signals.
-    # Kept as a plain column (not generated) so the loader controls exactly what
-    # is searchable; the tsvector index is built over it in the migration.
+    # Denormalised "preferred term + synonyms", the target for trigram
+    # similarity. Kept as a plain column so the loader controls exactly what is
+    # matched fuzzily.
     search_text: Mapped[str] = mapped_column(Text, nullable=False)
+    # The same three fields kept apart, because the full-text index weights them
+    # differently: A for the preferred term, B for synonyms, D for the
+    # description. A generated `search_vector` column (see the migration) builds
+    # the weighted tsvector from them.
+    synonym_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    description_text: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 
 class ConceptEmbeddingRow(Base):
@@ -130,11 +137,16 @@ def upsert_concepts(session: Session, concepts: Iterable[Concept]) -> int:
                 is_leaf=c.is_leaf,
                 chapter=c.chapter,
                 search_text=build_search_text(c),
+                synonym_text=build_synonym_text(c),
+                description_text=c.description,
             )
             for c in materialised
         ]
     )
     session.flush()
+    # A freshly rewritten slice leaves the planner with statistics describing
+    # the previous contents, which matters for the trigram and vector paths.
+    session.execute(sa.text("ANALYZE concepts"))
     return len(materialised)
 
 

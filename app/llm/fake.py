@@ -16,7 +16,11 @@ from app.models.candidate import Candidate
 from app.models.rerank import RankedCode, RerankResult
 
 # Fixed by position, not computed from scores: the point is reproducibility,
-# and a derived confidence would drift with every retrieval tweak.
+# and a derived confidence would drift with every retrieval tweak. These values
+# are NOT confidences and must never be shown as such -- the pipeline stores
+# `model_confidence` as null whenever this provider is in use, and the API
+# suppresses it on every ranked alternative. They exist only because the shared
+# rerank schema requires the field.
 _CONFIDENCE_LADDER = (0.90, 0.75, 0.60, 0.45, 0.30, 0.20, 0.15, 0.10)
 _TAIL_CONFIDENCE = 0.05
 
@@ -32,7 +36,7 @@ class FakeLLMProvider:
             return RerankResult(
                 ranked=[],
                 no_good_match=True,
-                notes="fake provider: no candidates were retrieved",
+                notes="Testleverantör: inga kandidater återfanns",
             )
 
         ordered = sorted(
@@ -51,7 +55,7 @@ class FakeLLMProvider:
                     else _TAIL_CONFIDENCE
                 ),
                 reason=(
-                    f"fake provider: ranked {position + 1} by lexical score "
+                    f"Testleverantör: plats {position + 1} efter lexikal poäng "
                     f"{candidate.lexical_score or 0.0:.3f}"
                 ),
             )

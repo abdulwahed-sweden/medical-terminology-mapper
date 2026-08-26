@@ -26,6 +26,7 @@ from app.llm.base import LLMProvider, PromptSpec, RerankFailed, enforce_candidat
 from app.models.candidate import Candidate
 from app.models.rerank import RerankResult
 from app.normalize.swedish import normalize
+from app.pipeline.gate import GATE_ID, GATE_VERSION, GateOutcome, evaluate_gate
 from app.retrieval.lexical import lexical_search
 from app.retrieval.merge import merge_candidates
 from app.retrieval.vector import vector_search
@@ -49,6 +50,7 @@ class MapOutcome:
     candidates: list[Candidate]
     rerank: RerankResult | None
     dropped_codes: list[str]
+    gate: GateOutcome
 
 
 def map_term(
@@ -92,6 +94,7 @@ def map_term(
         version=terminology_version,
         top_k=settings.lexical_top_k,
         trigram_threshold=settings.trigram_threshold,
+        index_descriptions=settings.index_descriptions,
     )
 
     query_vector = embedding_provider.embed([normalized.normalized])[0]
@@ -122,26 +125,58 @@ def map_term(
         },
     )
 
+    # ------------------------------------------------------------- the gate
+    gate = evaluate_gate(
+        candidates,
+        settings=settings,
+        embedding_provider_id=embedding_provider.provider_id,
+        embedding_model_id=embedding_provider.model_id,
+    )
+    logger.info(
+        "gate_evaluated",
+        extra={"gate_fired": gate.fired, "gate_reason": gate.reason, **gate.values},
+    )
+
     # -------------------------------------------------------------- reranking
     rerank_started = time.perf_counter()
     status = "pending"
     result: RerankResult | None = None
     dropped: list[str] = []
 
-    try:
-        raw_result = llm_provider.rerank(normalized.normalized, candidates, prompt)
-        result, dropped = enforce_candidate_codes(raw_result, candidates)
-    except RerankFailed as exc:
-        # The proposal is still written, with status rerank_failed. A human sees
-        # the retrieved candidates and can decide without the model's help.
-        status = "rerank_failed"
-        logger.error("rerank_failed", extra={"reason": str(exc)})
+    if gate.fired:
+        # The LLM is not called at all. Asking a model to rank evidence that is
+        # not there invites a confident answer built from noise, which is the
+        # failure this whole path exists to prevent. No call, no cost, no
+        # opportunity.
+        status = "no_good_match"
+    else:
+        try:
+            raw_result = llm_provider.rerank(normalized.normalized, candidates, prompt)
+            result, dropped = enforce_candidate_codes(raw_result, candidates)
+        except RerankFailed as exc:
+            # The proposal is still written, with status rerank_failed. A human
+            # sees the retrieved candidates and can decide without the model.
+            status = "rerank_failed"
+            logger.error("rerank_failed", extra={"reason": str(exc)})
+
+        if result is not None and result.no_good_match:
+            # The reranker's own verdict is a second, independent signal. Both
+            # are recorded: the gate admitted this, and the model still declined.
+            status = "no_good_match"
 
     latency_ms_rerank = _elapsed_ms(rerank_started)
 
     top = result.top if result is not None else None
-    suggested_code = None if result is None or result.no_good_match else (top.code if top else None)
-    model_confidence = None if suggested_code is None or top is None else top.confidence
+    suggested_code = None if status != "pending" or result is None or top is None else top.code
+
+    provider_kind = "fake" if llm_provider.provider_id == "fake" else "live"
+    # A deterministic stand-in has no confidence to report. Its raw reply is
+    # still stored verbatim in `rerank`; what is not stored is a number in the
+    # column everything downstream reads as "the model's confidence" -- a number
+    # in a screenshot travels without its caveat.
+    model_confidence = (
+        None if suggested_code is None or top is None or provider_kind == "fake" else top.confidence
+    )
 
     # ------------------------------------------------------------- audit row
     proposal = insert_proposal(
@@ -164,10 +199,19 @@ def map_term(
         latency_ms_retrieval=latency_ms_retrieval,
         latency_ms_rerank=latency_ms_rerank,
         status=status,
+        provider_kind=provider_kind,
+        gate_id=GATE_ID,
+        gate_version=GATE_VERSION,
+        gate_fired=gate.fired,
+        gate_values={**gate.values, "reason": gate.reason},
     )
 
     return MapOutcome(
-        proposal=proposal, candidates=candidates, rerank=result, dropped_codes=dropped
+        proposal=proposal,
+        candidates=candidates,
+        rerank=result,
+        dropped_codes=dropped,
+        gate=gate,
     )
 
 

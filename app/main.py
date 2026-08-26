@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 from app.api import routes_decisions, routes_map, routes_ui
 from app.config import get_settings
@@ -83,6 +85,14 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["ops"], summary="Liveness probe")
     def health() -> dict[str, str]:
         return {"status": "ok", "prompt_hash": prompt.sha256}
+
+    # One stylesheet and one script, served from disk. No CDN, no build step,
+    # no external font or icon host -- nothing the page needs leaves the server.
+    app.mount(
+        "/static",
+        StaticFiles(directory=str(Path(__file__).resolve().parent.parent / "static")),
+        name="static",
+    )
 
     app.include_router(routes_map.router)
     app.include_router(routes_decisions.router)

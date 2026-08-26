@@ -55,6 +55,15 @@ class InvalidDecision(ValueError):
     """The decision is internally inconsistent or names an unusable code."""
 
 
+class DecisionNotApplicable(RuntimeError):
+    """This kind of decision cannot apply to this proposal at all.
+
+    Distinct from `InvalidDecision`, which is about the payload. Accepting a
+    proposal that carries no suggestion is not a malformed request; it is a
+    request for something that does not exist.
+    """
+
+
 def record_decision(
     session: Session,
     *,
@@ -67,6 +76,13 @@ def record_decision(
     proposal = get_proposal(session, proposal_id)
     if proposal is None:
         raise ProposalNotFound(f"no proposal with id {proposal_id}")
+
+    if decision == "accept" and proposal.status == "no_good_match":
+        raise DecisionNotApplicable(
+            "det finns inget förslag att godkänna: systemet hittade ingen "
+            "tillräcklig träff. Välj 'reject' för att bekräfta att ingen kod "
+            "finns, eller 'correct' för att ange rätt kod."
+        )
 
     if get_decision_for(session, proposal_id) is not None:
         raise DecisionConflict(
@@ -103,8 +119,8 @@ def _resolve_final_code(
     if decision == "accept":
         if proposal.suggested_code is None:
             raise InvalidDecision(
-                f"proposal {proposal.id} has no suggested code to accept "
-                f"(status {proposal.status!r}); use 'correct' or 'reject'"
+                f"förslaget {proposal.id} har ingen föreslagen kod att godkänna "
+                f"(status {proposal.status!r}); använd 'correct' eller 'reject'"
             )
         if final_code and final_code.strip().upper() != proposal.suggested_code.upper():
             # Accepting *something else* is a correction. Naming it correctly
@@ -127,13 +143,9 @@ def _validate_code(session: Session, proposal: ProposalRow, code: str) -> str:
     if validator is None:  # pragma: no cover - target_system is constrained upstream
         raise InvalidDecision(f"unknown target system {system!r}")
 
-    if not validator.validate_code_format(code):
-        raise InvalidDecision(f"{code!r} is not a valid {system} code format")
-
-    # Beyond format: the code must actually exist in the version this proposal
-    # was computed against. A well-formed code that is not in the release would
-    # still be an invalid mapping, and this is the last point at which anything
-    # can catch it.
+    # Looked up first, because "exists but is not assignable" and "does not
+    # exist" need different messages, and only one of them means the user made
+    # a typo.
     exists = session.execute(
         sa.select(sa.func.count())
         .select_from(ConceptRow)
@@ -143,9 +155,25 @@ def _validate_code(session: Session, proposal: ProposalRow, code: str) -> str:
             ConceptRow.code == code,
         )
     ).scalar_one()
+
+    if not validator.validate_code_format(code):
+        if exists:
+            # A chapter, section or group heading -- "I10-I15", "EMA". The user
+            # found something real and picked the group instead of a code inside
+            # it; saying so is far more useful than "invalid format".
+            raise InvalidDecision(
+                f"koden {code} är en rubrik i {system} "
+                f"{proposal.terminology_version}, inte en tilldelningsbar kod"
+            )
+        raise InvalidDecision(f"koden {code} har inte giltigt format för {system}")
+
+    # Beyond format: the code must actually exist in the version this proposal
+    # was computed against. A well-formed code that is not in the release would
+    # still be an invalid mapping, and this is the last point at which anything
+    # can catch it.
     if not exists:
         raise InvalidDecision(
-            f"code {code} is well-formed but not present in "
+            f"koden {code} har giltigt format men finns inte i "
             f"{system} version {proposal.terminology_version}"
         )
     return code

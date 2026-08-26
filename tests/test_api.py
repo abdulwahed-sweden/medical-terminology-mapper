@@ -214,7 +214,7 @@ def test_correct_rejects_a_malformed_code(client: TestClient, icd10se_embedded: 
         },
     )
     assert response.status_code == 422
-    assert "not a valid icd10se code format" in response.json()["detail"]
+    assert "har inte giltigt format" in response.json()["detail"]
 
 
 def test_correct_rejects_a_code_absent_from_the_loaded_version(
@@ -233,7 +233,7 @@ def test_correct_rejects_a_code_absent_from_the_loaded_version(
         },
     )
     assert response.status_code == 422
-    assert "not present in icd10se version 2026-sample" in response.json()["detail"]
+    assert "finns inte i icd10se version 2026-sample" in response.json()["detail"]
 
 
 def test_correct_without_a_code_is_refused(client: TestClient, icd10se_embedded: str) -> None:
@@ -327,3 +327,115 @@ def test_validator_page_warns_when_nothing_is_loaded(
 
     body = client.get("/").text
     assert "Ingen terminologi är laddad" in body
+
+
+# ---------------------------------------------- no good match, end to end
+
+
+def _nonsense(client: TestClient) -> dict[str, Any]:
+    return _map(client, "banan")
+
+
+def test_no_good_match_is_reported_as_such(client: TestClient, icd10se_embedded: str) -> None:
+    body = _nonsense(client)
+    assert body["status"] == "no_good_match"
+    assert body["suggested_code"] is None
+    assert body["model_confidence"] is None
+    assert body["no_good_match"] is True
+    assert body["ranked"] == []
+    # The evidence is still returned, so the client can show it.
+    assert body["candidates"]
+
+
+def test_no_good_match_exposes_the_gate(client: TestClient, icd10se_embedded: str) -> None:
+    """ "The system found nothing" is a claim; it has to be checkable."""
+    gate = _nonsense(client)["gate"]
+    assert gate["id"] == "lexical_evidence"
+    assert gate["fired"] is True
+    assert gate["reason"]
+    assert gate["values"]["best_ts_rank"] == 0.0
+    assert gate["values"]["min_strict_similarity"] == 0.6
+
+
+def test_accept_on_no_good_match_is_409(client: TestClient, icd10se_embedded: str) -> None:
+    proposal = _nonsense(client)
+    response = client.post(
+        "/decisions",
+        json={"proposal_id": proposal["id"], "decision": "accept", "validator_id": "c"},
+    )
+    assert response.status_code == 409
+    assert "inget förslag att godkänna" in response.json()["detail"]
+
+
+def test_reject_on_no_good_match_is_recorded(client: TestClient, icd10se_embedded: str) -> None:
+    """The human confirming that no code exists is a real, valuable outcome."""
+    proposal = _nonsense(client)
+    body = client.post(
+        "/decisions",
+        json={
+            "proposal_id": proposal["id"],
+            "decision": "reject",
+            "validator_id": "c",
+            "validator_note": "ingen klinisk term",
+        },
+    ).json()
+    assert body["decision"]["decision"] == "reject"
+    assert body["decision"]["final_code"] is None
+    assert body["validated_mapping"] is None
+
+
+def test_correct_on_no_good_match_is_recorded(client: TestClient, icd10se_embedded: str) -> None:
+    """Every correction here is a future gold-set row."""
+    proposal = _nonsense(client)
+    body = client.post(
+        "/decisions",
+        json={
+            "proposal_id": proposal["id"],
+            "decision": "correct",
+            "final_code": "I10",
+            "validator_id": "c",
+        },
+    ).json()
+    assert body["decision"]["final_code"] == "I10"
+    assert body["validated_mapping"]["code"] == "I10"
+
+
+def test_correct_to_a_heading_names_it_as_one(client: TestClient, icd10se_embedded: str) -> None:
+    """I10-I15 is a section heading. "invalid format" would be true but
+    unhelpful -- the user found something real and picked the group."""
+    proposal = _map(client)
+    response = client.post(
+        "/decisions",
+        json={
+            "proposal_id": proposal["id"],
+            "decision": "correct",
+            "final_code": "I10-I15",
+            "validator_id": "c",
+        },
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert "rubrik" in detail
+    assert "tilldelningsbar" in detail
+
+
+# ------------------------------------------------------------ provider kind
+
+
+def test_fake_provider_reports_no_confidence_anywhere(
+    client: TestClient, icd10se_embedded: str
+) -> None:
+    """A number in a screenshot travels without its caveat."""
+    body = _map(client)
+    assert body["provider_kind"] == "fake"
+    assert body["model_confidence"] is None
+    assert body["ranked"]
+    assert all(entry["model_confidence"] is None for entry in body["ranked"])
+
+
+def test_matched_field_is_reported_on_candidates(client: TestClient, icd10se_embedded: str) -> None:
+    body = _map(client)
+    fields = {c["matched_field"] for c in body["candidates"]}
+    assert fields <= {"title", "synonym", "description", "vector"}
+    top = next(c for c in body["candidates"] if c["code"] == body["suggested_code"])
+    assert top["matched_field"] in {"title", "synonym"}

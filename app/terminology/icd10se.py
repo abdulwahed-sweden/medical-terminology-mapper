@@ -55,6 +55,11 @@ class ICD10SE:
                 # better than inventing one.
                 continue
             parent = next((row["parent"] for row in rows if row.get("parent")), None)
+            # Beskrivning is prose, not a name: carried separately so it can be
+            # indexed at a lower weight and never shown as a term.
+            description = " ".join(
+                dict.fromkeys(row["description"] for row in rows if row.get("description"))
+            )
             concepts.append(
                 Concept(
                     system="icd10se",
@@ -66,6 +71,7 @@ class ICD10SE:
                     # Both filled in by assign_hierarchy once the whole file is read.
                     is_leaf=True,
                     chapter=None,
+                    description=description,
                 )
             )
         return assign_hierarchy(concepts)

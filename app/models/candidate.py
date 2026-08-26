@@ -14,6 +14,10 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 RetrievalSource = Literal["lexical", "vector"]
+# Which part of the concept the hit came from. Recorded per candidate so a
+# result can be attributed: matching a preferred term and matching a sentence
+# of the publisher's prose are not the same kind of evidence.
+MatchedField = Literal["title", "synonym", "description", "vector"]
 
 
 class Candidate(BaseModel):
@@ -46,3 +50,10 @@ class Candidate(BaseModel):
 
     # Reciprocal-rank fusion score used for the pre-rerank ordering.
     fused_score: float = 0.0
+
+    matched_field: MatchedField | None = None
+
+    # pg_trgm strict_word_similarity against the concept's names. Kept beside
+    # `ts_rank` because the retrieval gate reads them separately: a full-text
+    # match and a fuzzy one are different strengths of evidence.
+    strict_similarity: float | None = None

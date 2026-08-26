@@ -7,8 +7,10 @@ Embeddings are stored per `(system, version, provider, model)`, so several
 vector spaces can coexist and a stored proposal can always name the one that
 produced its candidates. Re-running for the same tuple replaces it.
 
-The text embedded is the same `search_text` the lexical stage indexes --
-preferred term plus synonyms -- so the two stages see the same concept.
+The text embedded is the concept's names -- preferred term plus synonyms --
+and, when INDEX_DESCRIPTIONS is on, the publisher's description too, so the two
+retrieval stages see the same concept. Changing that setting therefore requires
+re-running this script.
 """
 
 from __future__ import annotations
@@ -62,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
 
     with session_scope() as session:
         concepts = session.execute(
-            sa.select(ConceptRow.code, ConceptRow.search_text)
+            sa.select(ConceptRow.code, ConceptRow.search_text, ConceptRow.description_text)
             .where(ConceptRow.system == args.system, ConceptRow.version == args.version)
             .order_by(ConceptRow.code)
         ).all()
@@ -87,7 +89,14 @@ def main(argv: list[str] | None = None) -> int:
         written = 0
         for start in range(0, len(concepts), args.batch_size):
             batch = concepts[start : start + args.batch_size]
-            vectors = provider.embed([row.search_text for row in batch])
+            vectors = provider.embed(
+                [
+                    f"{row.search_text} {row.description_text}".strip()
+                    if settings.index_descriptions
+                    else row.search_text
+                    for row in batch
+                ]
+            )
             session.add_all(
                 [
                     ConceptEmbeddingRow(

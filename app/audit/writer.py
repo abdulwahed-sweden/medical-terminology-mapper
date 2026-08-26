@@ -52,11 +52,17 @@ def insert_proposal(
     latency_ms_retrieval: int,
     latency_ms_rerank: int,
     status: str,
+    provider_kind: str,
+    gate_id: str,
+    gate_version: str,
+    gate_fired: bool,
+    gate_values: dict[str, Any],
 ) -> ProposalRow:
-    """Record one mapping attempt. Always `pending` or `rerank_failed`.
+    """Record one mapping attempt.
 
-    There is no status meaning "accepted": a proposal becomes resolved only by
-    the existence of a decision row referencing it (principle 1).
+    Status is `pending`, `rerank_failed`, or `no_good_match`. There is no status
+    meaning "accepted": a proposal becomes resolved only by the existence of a
+    decision row referencing it (principle 1).
     """
     row = ProposalRow(
         id=uuid.uuid4(),
@@ -78,6 +84,11 @@ def insert_proposal(
         latency_ms_retrieval=latency_ms_retrieval,
         latency_ms_rerank=latency_ms_rerank,
         status=status,
+        provider_kind=provider_kind,
+        gate_id=gate_id,
+        gate_version=gate_version,
+        gate_fired=gate_fired,
+        gate_values=gate_values,
     )
     session.add(row)
     session.flush()
@@ -90,6 +101,7 @@ def insert_proposal(
             "terminology_version": terminology_version,
             "suggested_code": suggested_code,
             "candidate_count": len(candidates),
+            "gate_fired": gate_fired,
         },
     )
     return row

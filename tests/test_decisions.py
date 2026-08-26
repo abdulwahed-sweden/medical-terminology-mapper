@@ -80,7 +80,7 @@ def test_second_decision_is_refused(db_session: Session, proposal_id: uuid.UUID)
 def test_correct_requires_a_valid_and_existing_code(
     db_session: Session, proposal_id: uuid.UUID
 ) -> None:
-    with pytest.raises(InvalidDecision, match="not a valid icd10se code format"):
+    with pytest.raises(InvalidDecision, match="har inte giltigt format"):
         record_decision(
             db_session,
             proposal_id=proposal_id,
@@ -88,7 +88,7 @@ def test_correct_requires_a_valid_and_existing_code(
             final_code="nonsense",
             validator_id="c",
         )
-    with pytest.raises(InvalidDecision, match="not present in icd10se version"):
+    with pytest.raises(InvalidDecision, match="finns inte i icd10se version"):
         record_decision(
             db_session,
             proposal_id=proposal_id,
@@ -144,7 +144,7 @@ def test_accept_is_impossible_without_a_suggestion(
     )
     assert outcome.proposal.status == "rerank_failed"
 
-    with pytest.raises(InvalidDecision, match="no suggested code to accept"):
+    with pytest.raises(InvalidDecision, match="ingen föreslagen kod"):
         record_decision(
             db_session,
             proposal_id=outcome.proposal.id,

@@ -73,6 +73,45 @@ class Settings(BaseSettings):
         ),
     )
     rrf_k: int = Field(default=60, description="Reciprocal-rank-fusion smoothing constant.")
+    index_descriptions: bool = Field(
+        default=True,
+        description=(
+            "Include the publisher's Beskrivning text in the full-text index, at "
+            "the lowest tsvector weight (D). See ARCHITECTURE.md for the "
+            "measurement behind the default."
+        ),
+    )
+
+    # --- Retrieval gate -----------------------------------------------------
+    # A deterministic check that runs after merge and before the LLM is called.
+    # If no candidate clears it, the proposal is recorded as no_good_match and
+    # the LLM is never asked -- it cannot be tempted to rank noise.
+    gate_min_ts_rank: float = Field(
+        default=0.0,
+        description=(
+            "Admit when the best full-text rank is strictly greater than this. "
+            "The default means 'the swedish text search configuration matched at "
+            "least one lexeme', which no nonsense query in the measurement did."
+        ),
+    )
+    gate_min_strict_similarity: float = Field(
+        default=0.60,
+        description=(
+            "Admit when the best pg_trgm strict_word_similarity reaches this. "
+            "Covers misspellings, which produce no full-text match at all. "
+            "Measured plateau is 0.58-0.62; see ARCHITECTURE.md."
+        ),
+    )
+    gate_vector_floors: dict[str, float] = Field(
+        default_factory=dict,
+        description=(
+            "Optional per-vector-space floors, keyed 'provider/model'. A space "
+            "with no entry contributes nothing to the gate. Deliberately empty "
+            "by default: the fake provider's similarities are hash noise and "
+            "must never be used to tune a threshold. UNTESTED against a live "
+            "embedding model."
+        ),
+    )
 
     # --- Terminology --------------------------------------------------------
     default_terminology_version: str = "2026"

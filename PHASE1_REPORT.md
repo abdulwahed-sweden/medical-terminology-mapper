@@ -1,6 +1,6 @@
 # Phase 1 build report
 
-**Built:** 2026-08-26 · **Branch:** `phase-1-build` · **Tests:** 203 passed, 2 skipped · **Coverage:** 85%
+**Built:** 2026-08-26 · **Branch:** `phase-1-build` · **Tests:** 282 passed, 2 skipped
 
 > **Post-Phase-1 follow-up (2026-08-26):** both loaders now read `.xlsx` as well
 > as `.tsv`, and the KVÅ loader has been **verified against the real published
@@ -408,3 +408,167 @@ index is being used before that becomes a complaint.
     the only hierarchy signal the workbook carries. Should it populate
     `chapter`? That would make `chapter` a label in workbook loads and a code in
     TSV loads, which is why it was not done.
+
+
+---
+
+## 8. Follow-up 2: no-good-match, honest confidence, retrieval evidence, page redesign (2026-08-27)
+
+Phase 2 remains not started.
+
+### 8.1 The defect
+
+`banan` returned *E11 Diabetes mellitus typ 2* at confidence 0.90. The retrieved
+evidence already said there was nothing there — every candidate vector-only,
+most at similarity 0.000, no lexical hit at all — but the pipeline reranked
+anyway and the page presented the result exactly like a real one.
+
+Two independent causes, both now fixed:
+
+1. **Nothing checked whether evidence existed.** The vector stage always returns
+   its nearest neighbours regardless of distance, and a reranker handed a list
+   will rank it.
+2. **A stand-in's placeholder was presented as a confidence.** The fake
+   reranker's fixed ladder (0.90, 0.75, …) was rendered as "Modellens säkerhet:
+   0.90". A caveat under a number does not travel with a screenshot.
+
+### 8.2 The gate rule
+
+`lexical_evidence` v1, in `app/pipeline/gate.py`. Runs after merge, before the
+LLM. Admit if **either**:
+
+- best `ts_rank` > `GATE_MIN_TS_RANK` (**0.0**) — the `swedish` configuration
+  matched a lexeme; or
+- best `strict_word_similarity` >= `GATE_MIN_STRICT_SIMILARITY` (**0.60**).
+
+A third clause admits on vector similarity, but only for a space listed in
+`GATE_VECTOR_FLOORS`, which is **empty by default** and marked ASSUMED — the
+bundled embedder's similarities are hashed-trigram noise, and tuning on them
+would produce a rule that looks measured and is worthless.
+
+**Values for the two named cases:**
+
+| Corpus | Query | `ts_rank` | `strict` | Verdict |
+| --- | --- | --- | --- | --- |
+| ICD-10-SE sample | `högt blodtryck` | 0.599 | 1.000 | admitted (full-text) |
+| ICD-10-SE sample | `banan` | 0.000 | 0.000 | **blocked** |
+| KVÅ 2026 (real) | `blodtrycksmätning` | 0.500 | 1.000 | admitted (full-text) |
+| KVÅ 2026 (real) | `banan` | 0.000 | **0.571** | **blocked** |
+
+**The margin is narrow and the rule is fragile — stated plainly.** On the sample
+fixture the separation is total. On the real 11 888-concept release, `banan`
+reaches 0.571 against "An**nan ban**dningsoperation", **0.029 below the
+threshold**. Worse, the classes genuinely overlap on that signal: the worst
+measured misspelling (`adenoisntest`) scores 0.529, *below* `banan`. No
+similarity threshold alone can separate them, which is why the full-text clause
+carries the correctly-spelled cases and the fuzzy clause only rescues typos.
+
+0.60 was not chosen to make the two examples work: 0.58, 0.60 and 0.62 all admit
+29/30 misspellings and 0/29 negatives. It is the middle of that plateau.
+
+Switching the trigram signal from `word_similarity` to `strict_word_similarity`
+was a prerequisite, not a cosmetic change: under the old function `banan` scored
+0.833, *above* the legitimate misspelling `hjartinfarkt` at 0.625, and no rule
+could have worked.
+
+### 8.3 Fake-provider confidence
+
+`provider_kind` is stored on every proposal. When `fake`: `model_confidence` is
+null on the proposal and suppressed on every ranked alternative in the API, and
+the evidence table drops the confidence column entirely. The raw reply is still
+stored verbatim in `rerank` — the audit keeps what the provider said; what it
+does not do is promote a placeholder into the field everything reads as
+confidence.
+
+Rendered suggestion header in test mode:
+
+```html
+<span class="status-label status-label--suggestion">Förslag</span>
+<div class="code-display">
+  <span class="code" id="s-code">I10</span>
+  <span class="term" id="s-term">Essentiell hypertoni (högt blodtryck utan känd orsak)</span>
+</div>
+<p class="meta-line" id="s-confidence">
+  <span class="badge badge--test">Testleverantör — ingen säkerhetsskattning</span>
+</p>
+<p class="reason-line" id="s-reason">Testleverantör: plats 1 efter lexikal poäng 1.000</p>
+```
+
+Plus a page-level warning band whenever either provider is a stand-in.
+
+### 8.4 Descriptions in the index — measured, then enabled
+
+Weighted `A` preferred term / `B` synonyms / `D` description in a generated
+`search_vector`. Trigram matching still runs on names only. On the real KVÅ 2026
+release (2 182 of 11 888 concepts carry a description):
+
+| Measure | Off | On |
+| --- | --- | --- |
+| `ballongdilatation` → `FNG02` | not retrieved | **#4** (`matched_field=description`) |
+| `ballongvidgning av kranskärl` → `FNG02` | not retrieved | still not retrieved |
+| `PTCA`, `koronarangioplastik` → `FNG02` | #1 | #1 (unchanged) |
+| Description-only recall, 40 probes | 1/40 (2%) | **19/40 (48%)** |
+| Genuinely-absent words admitted by the gate | 0/15 | **0/15** |
+| ICD-10-SE gold set Top-1 / Top-3 / candidate recall | 12/12 · 12/12 · 12/12 | unchanged |
+
+**Default: on.**
+
+Negatives used: 20 everyday Swedish words. Five of them —
+`cykel`, `tvättmaskin`, `paraply`, `trädgård`, `strumpor` — turned out to occur
+in KVÅ (exercise-ECG "cykel och rullmatta", an ADL washing assessment,
+compression stockings), so they are not negatives at all and were excluded. The
+remaining 15 are `banan pizza fotboll skruvmejsel gardin kaffekopp biljett
+tangentbord sommarstuga bokhylla piano resväska morotskaka segelbåt brevlåda`.
+The first measurement scored those five as false positives; inspecting them
+showed the opposite, which is the reason to inspect rather than tabulate.
+
+The gold set cannot measure this change: the ICD-10-SE sample fixture carries no
+`Beskrivning` values, so descriptions are inert there. Said here rather than
+reported as "no regression".
+
+### 8.5 Page redesign
+
+One Jinja template, one stylesheet, one vanilla-JS file, served from `/static`.
+No framework, build step, npm, CDN, external font or icon library — enforced by
+a test that fails on any `http://` or `https://` in the three files.
+
+Four result states, each with its own heading, status label and coloured left
+edge: **Förslag**, **Ingen tillräcklig träff**, **Omrankning misslyckades**,
+**Beslut registrerat**. Decision buttons sit directly under the suggestion,
+before any table. The two duplicated candidate lists are now one table, top 5 by
+default, with `matched_field` shown, a legend for `—`, tabular numerals, a
+sticky header, and a sticky first column below 620px.
+
+**Contrast, verified and enforced.** 13 text pairs at ≥4.5:1 and 6 UI pairs at
+≥3:1, checked by `tests/test_ui.py` against the stylesheet's own tokens, so it
+cannot regress silently. Lowest text pair 5.82:1 (`--c-ok` on `--c-ok-bg`);
+lowest UI pair 3.25:1 (`--c-border` on `--c-bg`). Two colours were changed after
+the first check failed: the default border 1.66:1 → 3.25:1 and the warning
+accent bar 2.86:1 → 3.97:1.
+
+**Not done:** automated browser tests. Playwright ships no Chromium for macOS 12
+(`Playwright does not support chromium on mac12`), the development machine here.
+Writing browser tests that could not be run once locally and wiring them into CI
+would risk breaking CI to produce assurance nobody had checked. No screenshots
+for the same reason. `docs/MANUAL_UI_TEST.md` is the ten-minute manual pass.
+
+### 8.6 New tests
+
+`tests/test_gate.py` (17), `tests/test_ui.py` (42), plus additions to
+`test_api.py`, `test_retrieval.py`, `test_audit_append_only.py`. Named in the
+reply that accompanied this work.
+
+### 8.7 Open questions added
+
+13. **Re-measure the gate against ICD-10-SE.** All the negative evidence is from
+    KVÅ. ICD-10-SE has ~39 000 concepts and different vocabulary; `banan` could
+    behave differently.
+14. **Should a short query be treated differently?** `och` normalises to three
+    characters and reaches `strict_word_similarity` 1.000 against the whole
+    terminology, so the gate admits it and leaves the verdict to the reranker.
+    With a real model that is probably right; with the stand-in it produces a
+    suggestion for a stopword.
+15. **The trigram predicate is a sequential scan.** 145 ms over 11 888 concepts;
+    the GIN index supports `<<%` but the planner does not choose it, and
+    `ANALYZE` does not change that. Untouched here — but it will matter at
+    ICD-10-SE's scale.

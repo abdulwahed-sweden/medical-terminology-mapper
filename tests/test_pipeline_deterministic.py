@@ -130,7 +130,11 @@ def test_rerank_payload_is_stored_verbatim(db_session: Session, icd10se_embedded
     outcome = _run(db_session, icd10se_embedded)
     assert outcome.rerank is not None
     assert outcome.proposal.rerank == outcome.rerank.model_dump(mode="json")
-    assert outcome.proposal.model_confidence == outcome.rerank.ranked[0].confidence
+    # The stand-in's raw reply is kept verbatim for audit, but its ladder value
+    # is never promoted into the model_confidence column.
+    assert outcome.proposal.provider_kind == "fake"
+    assert outcome.proposal.model_confidence is None
+    assert outcome.rerank.ranked[0].confidence == 0.90
 
 
 def test_candidate_cap_is_applied(db_session: Session, icd10se_embedded: str) -> None:
@@ -240,7 +244,12 @@ def test_query_with_no_matches_produces_a_proposal_with_no_suggestion(
     db_session: Session, icd10se_embedded: str
 ) -> None:
     """The vector stage always returns its nearest neighbours, so candidates
-    exist; what must not happen is a confident suggestion out of nothing."""
+    exist. What must not happen is a confident suggestion built out of them."""
     outcome = _run(db_session, icd10se_embedded, text="qzxwvk lorem ipsum")
-    assert outcome.proposal.status == "pending"
+    assert outcome.proposal.status == "no_good_match"
+    assert outcome.proposal.suggested_code is None
+    assert outcome.proposal.model_confidence is None
+    assert outcome.proposal.gate_fired is True
+    # The candidates are still recorded in full, so the claim is checkable.
+    assert outcome.proposal.candidates
     assert get_decision_for(db_session, outcome.proposal.id) is None

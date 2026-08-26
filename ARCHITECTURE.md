@@ -36,10 +36,15 @@ lexical        vector                 │  both run against one
        merge (reciprocal-rank fusion, dedupe, cap)
           │
           ▼
-    LLM rerank ──► strict JSON ──► repair retry ──► hallucinated-code guard
+    retrieval gate ──── blocked ──► no_good_match, LLM never called
           │
+       admitted
           ▼
-     proposal  (status: pending | rerank_failed)     ← append-only
+    LLM rerank ──► strict JSON ──► repair retry ──► hallucinated-code guard
+          │                                                │
+          │                          model's own no_good_match flag
+          ▼
+     proposal  (pending | rerank_failed | no_good_match)   ← append-only
           │
           ▼
    human decision  (accept | reject | correct)       ← append-only, exactly one
@@ -110,16 +115,141 @@ concept. That is deliberate: the Phase 3 comparative benchmark (lexical vs
 embeddings vs RAG+LLM) can then be computed from stored proposals without
 re-running anything.
 
-#### `word_similarity`, not `similarity`
+#### `strict_word_similarity`, not `word_similarity`, not `similarity`
 
-pg_trgm's plain `similarity()` normalises over the whole target string. A
-concept whose search text carries a Latin term and three inclusion terms scores
-*lower* than a bare one for the same query — it penalises exactly the
-richly-described concepts that ought to match best. `word_similarity()` compares
-the query against the best-matching extent instead.
+Three trigram functions, arrived at by measurement rather than preference.
 
-Measured on the sample fixture: `hjartinfarkt` (missing the `ä`) retrieves both
-`I21` and `I21.9` with word similarity, but only `I21.9` with plain similarity.
+`similarity()` normalises over the whole target string, so a concept carrying a
+Latin term and three inclusion terms scores *lower* than a bare one for the same
+query — it penalises exactly the richly-described concepts that should match
+best. Replacing it with `word_similarity()`, which compares the query against
+the best-matching *extent*, fixed that: `hjartinfarkt` (missing the `ä`) began
+retrieving both `I21` and `I21.9` instead of only `I21.9`.
+
+But `word_similarity`'s extent may begin and end mid-word. Measured against the
+real KVÅ 2026 release, that let the query `banan` score **0.833** against
+"An**nan ban**dningsoperation på a. pulmonalis" — higher than the legitimate
+misspelling `hjartinfarkt` scores against its own concept (0.625). Nonsense
+outscoring a real typo is not a threshold problem; it means no threshold exists.
+
+`strict_word_similarity()` requires the extent to sit on word boundaries. The
+same `banan` case falls to 0.571, while every correctly-spelled query is
+unchanged and the measured misspellings barely move. That is what makes the
+retrieval gate below possible.
+
+### The retrieval gate
+
+A deterministic check between merge and reranking. If nothing clears it, **the
+LLM is never called**: the proposal is recorded with status `no_good_match`, no
+suggested code, no confidence, and the full candidate list.
+
+The reason this exists is a real defect. Typing `banan` used to return
+*E11 Diabetes mellitus typ 2* at confidence 0.90 — because the vector stage
+always returns its nearest neighbours regardless of distance, and a reranker
+asked to rank a list will rank it. The evidence already said there was nothing
+there: no lexical hit at all, and vector similarities of 0.000. Presenting that
+as a confident suggestion is the worst failure this system can have, because it
+is indistinguishable on screen from a correct one.
+
+**The rule.** Admit if either holds:
+
+1. the best `ts_rank` exceeds `GATE_MIN_TS_RANK` (default `0.0`) — the `swedish`
+   configuration matched at least one lexeme; or
+2. the best `strict_word_similarity` reaches `GATE_MIN_STRICT_SIMILARITY`
+   (default `0.60`) — strong fuzzy evidence, which is how misspellings get in.
+
+A third clause admits on vector similarity, but only for a vector space with a
+configured floor in `GATE_VECTOR_FLOORS`, which is **empty by default**.
+
+**Why the vector stage is excluded by default.** The bundled embedding provider
+hashes character trigrams, so a similarity between two of its vectors is noise.
+The 0.000 values seen for `banan` are an artefact of that provider, not evidence
+of anything, and a real embedding model would score `banan` at roughly 0.3–0.5
+against almost everything. Tuning a threshold on those numbers would produce a
+rule that looks measured and is worthless. Any vector floor is therefore keyed
+by `(provider, model)`, off unless configured, and marked **ASSUMED and
+untested against a live model**.
+
+**The measurement.** Against the real KVÅ 2026 release (11 888 concepts), with
+29 everyday Swedish non-clinical words as negatives and 30 mechanically
+mistyped real terms as positives:
+
+| Signal | Misspellings (want admit) | Negatives (want reject) |
+| --- | --- | --- |
+| `ts_rank > 0` | 1 / 30 | **0 / 29** |
+| `strict_word_similarity` range | 0.529 – 0.921 | 0.188 – **0.571** |
+| Combined rule at 0.60 | **29 / 30** | **0 / 29** |
+
+The two classes **overlap** on similarity alone: the worst misspelling
+(`adenoisntest`, two transpositions in one word) scores 0.529, below the best
+negative (`banan`) at 0.571. No single similarity threshold separates them —
+which is why the rule needs the full-text clause, and why that clause carries
+the correctly-spelled cases on its own.
+
+0.60 sits in the middle of a plateau: 0.58, 0.60 and 0.62 all give 29/30 and
+0/29. It was not chosen to make two examples work.
+
+**Known fragility.** The nearest negative is only **0.029** below the threshold.
+That is not much room, and the evidence behind it is 29 negatives on one
+terminology. A different corpus could put a nonsense word above 0.60. The rule
+is transparent, versioned and configurable precisely so that this can be
+re-measured rather than argued about, and every proposal stores the values it
+was judged on.
+
+**What the gate is not.** It does not judge relevance. A query of ordinary
+Swedish words that genuinely occur in the terminology — "patient",
+"behandling" — passes, correctly: there *is* lexical evidence. Deciding whether
+that evidence means anything is the reranker's job, and its own `no_good_match`
+flag is the second, independent signal. Both are recorded; neither overrides the
+other's place in the audit trail.
+
+### Descriptions are indexed, at the lowest weight
+
+The publisher's `Beskrivning` is prose, not a name — so it is stored separately,
+weighted `D` in the `search_vector` (against `A` for the preferred term and `B`
+for synonyms), and never shown as a term or used for trigram matching. Trigram
+similarity exists to survive a misspelled *name*; running it over prose produces
+noise rather than tolerance.
+
+Measured on the real KVÅ 2026 release, where 2 182 of 11 888 concepts carry a
+description:
+
+| | descriptions off | descriptions on |
+| --- | --- | --- |
+| `ballongdilatation` → `FNG02` | not retrieved | **#4**, attributed to `description` |
+| Description-only recall (40 probes) | 1 / 40 (2%) | **19 / 40 (48%)** |
+| Non-clinical words admitted by the gate | 0 / 15 | **0 / 15** |
+| ICD-10-SE gold set, Top-1 / candidate recall | 12/12 · 12/12 | **12/12 · 12/12** |
+
+`FNG02` is *Perkutan transluminal koronarangioplastik (PTCA)*; the words a
+clinician actually types — "ballongdilatation" — live only in its description.
+Those were retrieval misses that no reranking could recover.
+
+A first pass suggested three non-clinical words started matching. Inspection
+showed all three were **true** positives: `cykel` matched an exercise-ECG code
+whose description reads "Inkluderar även cykel och rullmatta", `strumpor` a
+compression-therapy code, `tvättmaskin` an ADL assessment. In a *procedure*
+classification those words are clinical. Re-measured against words verifiably
+absent from the terminology, the precision cost is zero — which is why the
+setting defaults to on.
+
+Every candidate records `matched_field` (`title` / `synonym` / `description` /
+`vector`), so a hit on a preferred term and a hit on a sentence of prose are
+never confused for one another.
+
+### A stand-in has no confidence
+
+The fake reranker emits a fixed confidence ladder so its output is
+reproducible. Those numbers are not confidences, and the old page printed one of
+them as "Modellens säkerhet: 0.90" next to a caveat. A number in a screenshot
+travels without its caveat.
+
+So every proposal records `provider_kind`. When it is `fake`, `model_confidence`
+is null on the proposal and suppressed on every ranked alternative in the API,
+the confidence column disappears from the evidence table, and the page shows a
+test-mode banner and a badge instead. The raw reply is still stored verbatim in
+`rerank` — the audit record keeps what the provider said; what it does not do is
+promote a placeholder into the field everything downstream reads as confidence.
 
 ### Exclusion terms are never indexed
 
@@ -246,9 +376,21 @@ linger.
 
 ### One server-rendered page, no dashboard
 
-The validator is one HTML file with inline JavaScript. No framework, no build
-step. The hard problem here is the audit trail; time spent on a dashboard would
-be time spent on the wrong thing.
+One Jinja template, one stylesheet, one vanilla-JS file. No framework, no build
+step, no npm, no CDN, no external font. The hard problem here is the audit
+trail; a dashboard would be time spent on the wrong thing.
+
+The page is ordered by the questions a validator actually asks: what did you
+ask, what does the system suggest (or not), what do you want to do about it —
+and only then, what is the evidence and how do I trace this later. Decision
+buttons sit directly under the suggestion, never below a table of numbers, and
+the candidates live in a single table rather than the two duplicated lists the
+first version had.
+
+Four result states — suggestion, no good match, rerank failed, decision
+recorded — each carry their own heading, status label and coloured left edge, so
+they are not mistakable for one another. Built to WCAG 2.1 AA: every colour pair
+in the stylesheet is checked by a test, so contrast cannot regress unnoticed.
 
 ### An instrument, not a number
 
@@ -280,7 +422,8 @@ fixed in different places.
    pipeline has separately been run against the real 11 888-code KVÅ release,
    but the committed fixtures remain samples.
 4. **`model_confidence` is uncalibrated.** It is a self-report, useful for
-   ordering and for spotting a flat distribution, not a probability.
+   ordering and for spotting a flat distribution, not a probability. It is
+   suppressed entirely when the deterministic stand-in produced the ranking.
 5. **No authentication.** `validator_id` is a free string. Phase 1 has no auth,
    no multi-user support and no RBAC, so the audit trail records a *claimed*
    identity. Anything beyond a single trusted operator needs real authentication
@@ -294,6 +437,18 @@ fixed in different places.
    mapping, no combination rules (dagger/asterisk pairs, mandatory additional
    codes). The classification files carry that information; Phase 1 does not
    act on it.
+9. **The gate's fuzzy threshold rests on thin evidence.** 29 negatives and 30
+   misspellings on one terminology, with the nearest negative 0.029 below the
+   threshold, and the two classes overlapping on that signal alone. It is
+   versioned and recorded per proposal so it can be re-measured; it should be,
+   against ICD-10-SE and against real mistyped input.
+10. **The gate cannot judge relevance**, only whether evidence exists. Common
+    Swedish words that occur in the terminology pass it. That is the reranker's
+    job, and with the stand-in there is no reranker worth the name.
+11. **No automated browser tests.** Playwright ships no Chromium for the
+    development machine's OS. Page structure, semantics and contrast are tested
+    server-side; interaction is a manual checklist
+    (`docs/MANUAL_UI_TEST.md`).
 
 ---
 

@@ -81,6 +81,7 @@ def vector_search(
             sources=["vector"],
             vector_score=float(row.cosine_similarity),
             vector_rank=rank,
+            matched_field="vector",
         )
         for rank, row in enumerate(rows, start=1)
     ]

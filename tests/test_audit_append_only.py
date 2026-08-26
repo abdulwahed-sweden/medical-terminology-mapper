@@ -150,3 +150,86 @@ def test_inserts_still_work(connection: Connection) -> None:
         {"pid": proposal_id},
     ).scalar_one()
     assert count == 1
+
+
+# ------------------------------------------------ the gate is part of the audit
+
+
+def test_gate_columns_exist_and_are_not_nullable(connection: Connection) -> None:
+    rows = connection.execute(
+        sa.text(
+            "SELECT column_name, is_nullable FROM information_schema.columns "
+            "WHERE table_name = 'proposals' AND column_name IN "
+            "('gate_id','gate_version','gate_fired','gate_values','provider_kind')"
+        )
+    ).all()
+    assert {r.column_name for r in rows} == {
+        "gate_id",
+        "gate_version",
+        "gate_fired",
+        "gate_values",
+        "provider_kind",
+    }
+    # A proposal without a recorded gate verdict would be an unauditable claim.
+    assert all(r.is_nullable == "NO" for r in rows)
+
+
+def test_no_good_match_is_an_accepted_status(connection: Connection) -> None:
+    proposal_id = uuid.uuid4()
+    connection.execute(
+        sa.text(
+            """
+            INSERT INTO proposals (
+                id, trace_id, input_text, normalized_text, target_system,
+                terminology_version, candidates, rerank, suggested_code,
+                model_confidence, llm_provider, llm_model, prompt_id, prompt_hash,
+                embedding_provider, embedding_model, latency_ms_retrieval,
+                latency_ms_rerank, status, provider_kind, gate_id, gate_version,
+                gate_fired, gate_values
+            ) VALUES (
+                :id, 'trace', 'banan', 'banan', 'icd10se',
+                '2026', '[]'::jsonb, NULL, NULL,
+                NULL, 'fake', 'fake-rerank-v1', 'rerank_v1', 'deadbeef',
+                'fake', 'fake-hash-v1', 1,
+                0, 'no_good_match', 'fake', 'lexical_evidence', '1',
+                true, '{"best_ts_rank": 0.0}'::jsonb
+            )
+            """
+        ),
+        {"id": proposal_id},
+    )
+    status = connection.execute(
+        sa.text("SELECT status FROM proposals WHERE id = :id"), {"id": proposal_id}
+    ).scalar_one()
+    assert status == "no_good_match"
+
+
+def test_a_no_good_match_proposal_is_equally_immutable(connection: Connection) -> None:
+    """ "The system found nothing" must be as permanent as any other verdict."""
+    test_no_good_match_is_an_accepted_status(connection)
+    message = _expect_db_error(
+        connection,
+        lambda: connection.execute(
+            sa.text("UPDATE proposals SET gate_fired = false WHERE status = 'no_good_match'")
+        ),
+    )
+    assert "append-only table" in message
+
+
+def test_an_invalid_status_is_still_rejected(connection: Connection) -> None:
+    def insert_bad_status() -> object:
+        return connection.execute(
+            sa.text(
+                "INSERT INTO proposals (id, trace_id, input_text, normalized_text,"
+                " target_system, terminology_version, candidates, llm_provider,"
+                " llm_model, prompt_id, prompt_hash, embedding_provider,"
+                " embedding_model, latency_ms_retrieval, latency_ms_rerank, status,"
+                " gate_id, gate_version, gate_fired, gate_values)"
+                " VALUES (:id, 't', 'x', 'x', 'icd10se', '2026', '[]'::jsonb, 'fake',"
+                " 'm', 'p', 'h', 'fake', 'm', 1, 1, 'accepted', 'g', '1', false,"
+                " '{}'::jsonb)"
+            ),
+            {"id": uuid.uuid4()},
+        )
+
+    assert "ck_proposals_status" in _expect_db_error(connection, insert_bad_status)

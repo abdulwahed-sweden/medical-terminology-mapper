@@ -3,370 +3,237 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Medical Terminology Mapper — validering</title>
-<style>
-  :root {
-    --bg: #fbfbfa; --fg: #1a1a18; --muted: #6b6b63; --line: #e3e2dd;
-    --panel: #ffffff; --accent: #1f5f8b; --warn: #8a5a00; --warn-bg: #fdf6e3;
-    --ok: #1e6b3a; --danger: #9b2226;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #16171a; --fg: #e9e8e4; --muted: #9a9a92; --line: #2e3035;
-      --panel: #1d1f23; --accent: #78b7dd; --warn: #e0b050; --warn-bg: #2a2410;
-      --ok: #6cc48c; --danger: #e07a7d;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; background: var(--bg); color: var(--fg);
-    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  }
-  .wrap { max-width: 940px; margin: 0 auto; padding: 28px 20px 64px; }
-  h1 { font-size: 21px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); margin: 0 0 20px; font-size: 14px; }
-  .banner {
-    background: var(--warn-bg); border: 1px solid var(--line);
-    border-left: 3px solid var(--warn); padding: 10px 14px; border-radius: 4px;
-    font-size: 13.5px; margin-bottom: 22px;
-  }
-  .panel {
-    background: var(--panel); border: 1px solid var(--line);
-    border-radius: 6px; padding: 18px; margin-bottom: 18px;
-  }
-  label { display: block; font-size: 12.5px; color: var(--muted);
-          text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px; }
-  input[type=text], select {
-    width: 100%; padding: 9px 11px; font-size: 15px; font-family: inherit;
-    border: 1px solid var(--line); border-radius: 4px;
-    background: var(--bg); color: var(--fg);
-  }
-  .row { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
-  .row > div { flex: 1 1 200px; }
-  button {
-    font: inherit; padding: 9px 16px; border-radius: 4px; cursor: pointer;
-    border: 1px solid var(--line); background: var(--panel); color: var(--fg);
-  }
-  button:hover:not(:disabled) { border-color: var(--accent); }
-  button:disabled { opacity: .5; cursor: not-allowed; }
-  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-  button.accept { border-color: var(--ok); color: var(--ok); }
-  button.reject { border-color: var(--danger); color: var(--danger); }
-  .hidden { display: none !important; }
-  .suggestion { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
-  .code {
-    font: 600 26px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
-    color: var(--accent);
-  }
-  .term { font-size: 17px; }
-  .conf { color: var(--muted); font-size: 13px; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em;
-       color: var(--muted); margin: 22px 0 8px; font-weight: 600; }
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line);
-           vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; font-size: 12px;
-       text-transform: uppercase; letter-spacing: .04em; }
-  td.num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right;
-           white-space: nowrap; }
-  td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-  .scroll { overflow-x: auto; }
-  .tag { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 3px;
-         border: 1px solid var(--line); color: var(--muted); margin-right: 4px; }
-  .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
-             margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
-  .prov { color: var(--muted); font-size: 12px; margin-top: 20px;
-          padding-top: 14px; border-top: 1px solid var(--line); }
-  .prov code { font-size: 11.5px; word-break: break-all; }
-  .decided { border-left: 3px solid var(--ok); }
-  .err { color: var(--danger); font-size: 13.5px; margin-top: 10px; }
-  .muted { color: var(--muted); }
-</style>
+<title>Kartläggning av kliniska termer</title>
+<link rel="stylesheet" href="/static/validator.css">
 </head>
 <body>
+<a class="skip-link" href="#resultat">Hoppa till resultatet</a>
+
 <div class="wrap">
+  <header>
+    <h1 class="site-title">Kartläggning av kliniska termer</h1>
+    <p class="site-purpose">
+      Från fritext till standardiserad kod i ICD-10-SE och KVÅ, med obligatorisk
+      mänsklig validering.
+    </p>
 
-  <h1>Medical Terminology Mapper</h1>
-  <p class="sub">Kartläggning av fritext till ICD-10-SE och KVÅ — med obligatorisk mänsklig validering.</p>
-
-  <div class="banner">
-    <strong>Beslutsstöd, inte automatisk kodning.</strong>
-    Systemet föreslår; du beslutar. Ingen kod är giltig förrän ett beslut har
-    registrerats, och beslut kan varken ändras eller tas bort.
-  </div>
-
-  {% if not versions %}
-  <div class="banner">
-    <strong>Ingen terminologi är laddad.</strong>
-    Kör <code>scripts/load_terminology.py</code> och därefter
-    <code>scripts/embed_terminology.py</code>.
-  </div>
-  {% endif %}
-
-  <form class="panel" id="map-form" autocomplete="off">
-    <div class="row">
-      <div style="flex: 3 1 320px;">
-        <label for="text">Klinisk term</label>
-        <input type="text" id="text" name="text" required maxlength="500"
-               placeholder="t.ex. högt blodtryck" value="">
-      </div>
-      <div>
-        <label for="target">Kodverk och version</label>
-        <select id="target" name="target">
-          {% for v in versions %}
-          <option value="{{ v.system }}|{{ v.version }}">
-            {{ v.system }} {{ v.version }} ({{ v.count }} begrepp)
-          </option>
-          {% endfor %}
-        </select>
-      </div>
-    </div>
-    <div class="row">
-      <div>
-        <label for="validator_id">Validerare</label>
-        <input type="text" id="validator_id" name="validator_id" required
-               maxlength="128" placeholder="ditt namn eller signatur">
-      </div>
-      <div style="display: flex; align-items: flex-end;">
-        <button type="submit" class="primary" id="submit"
-                {% if not versions %}disabled{% endif %}>Föreslå kod</button>
-      </div>
-    </div>
-    <div class="err hidden" id="form-error"></div>
-  </form>
-
-  <div class="panel hidden" id="result">
-    <h2>Förslag</h2>
-    <div class="suggestion">
-      <span class="code" id="r-code">—</span>
-      <span class="term" id="r-term"></span>
-    </div>
-    <div class="conf" id="r-conf"></div>
-    <div class="conf hidden" id="r-notes"></div>
-
-    <div id="alt-block">
-      <h2>Övriga alternativ och modellens motivering</h2>
-      <div class="scroll">
-        <table>
-          <thead><tr><th>Kod</th><th>Term</th><th style="text-align:right">Modellens
-            säkerhet</th><th>Motivering</th></tr></thead>
-          <tbody id="r-ranked"></tbody>
-        </table>
-      </div>
+    <div class="notice">
+      <p>
+        <span class="notice__label">Beslutsstöd, inte automatisk kodning.</span>
+        Systemet föreslår; du beslutar. Ingen kod är giltig förrän ett beslut har
+        registrerats, och beslut kan varken ändras eller tas bort.
+      </p>
     </div>
 
-    <h2>Återvunna kandidater och poäng</h2>
-    <div class="scroll">
-      <table>
-        <thead><tr><th>Kod</th><th>Term</th><th>Källa</th>
-          <th style="text-align:right">Lexikal</th>
-          <th style="text-align:right">Vektor</th>
-          <th style="text-align:right">RRF</th></tr></thead>
-        <tbody id="r-candidates"></tbody>
-      </table>
+    {% if provider_kind == "fake" %}
+    <div class="notice notice--warn" role="note">
+      <p>
+        <span class="notice__label">Testläge.</span>
+        Rankning och inbäddning sker med deterministiska testleverantörer.
+        Ingen säkerhetsskattning visas, och förslagen säger inget om kvaliteten
+        i en verklig kartläggning.
+      </p>
     </div>
+    {% endif %}
 
-    <div class="actions" id="actions">
-      <button type="button" class="accept" id="btn-accept">Godkänn</button>
-      <button type="button" class="reject" id="btn-reject">Avslå</button>
-      <button type="button" id="btn-correct">Korrigera…</button>
-      <span class="muted" id="action-hint"></span>
+    {% if not versions %}
+    <div class="notice notice--warn" role="note">
+      <p>
+        <span class="notice__label">Ingen terminologi är laddad.</span>
+        Kör <code>scripts/load_terminology.py</code> och därefter
+        <code>scripts/embed_terminology.py</code>.
+      </p>
     </div>
+    {% endif %}
+  </header>
 
-    <div class="row hidden" id="correct-block" style="margin-top:14px;">
-      <div>
-        <label for="final_code">Korrekt kod</label>
-        <input type="text" id="final_code" maxlength="32" placeholder="t.ex. I15.9">
-      </div>
-      <div style="flex: 2 1 260px;">
-        <label for="note">Kommentar (valfri)</label>
-        <input type="text" id="note" maxlength="500">
-      </div>
-      <div style="display:flex; align-items:flex-end;">
-        <button type="button" class="primary" id="btn-correct-submit">Registrera korrigering</button>
-      </div>
+  <main>
+    <!-- 1 ------------------------------------------------------------ input -->
+    <section class="card" aria-labelledby="sok-rubrik">
+      <h2 id="sok-rubrik">Sök kod</h2>
+      <form id="map-form" autocomplete="off" novalidate>
+        <div class="field">
+          <label for="text">Klinisk term</label>
+          <span class="hint" id="text-hint">Skriv termen så som den står i journalen, till exempel “högt blodtryck”.</span>
+          <input type="text" id="text" name="text" maxlength="500" required autofocus
+                 aria-describedby="text-hint text-error" placeholder="högt blodtryck">
+          <p class="error-text hidden" id="text-error"></p>
+        </div>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="target">Kodverk och version</label>
+            <span class="hint" id="target-hint">Förslaget beräknas mot den valda versionen.</span>
+            <select id="target" name="target" aria-describedby="target-hint">
+              {% for v in versions %}
+              <option value="{{ v.system }}|{{ v.version }}">{{ v.system }} {{ v.version }} ({{ v.count }} begrepp)</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field">
+            <label for="validator_id">Validerare</label>
+            <span class="hint" id="validator-hint">Sparas i loggen tillsammans med ditt beslut.</span>
+            <input type="text" id="validator_id" name="validator_id" maxlength="128" required
+                   aria-describedby="validator-hint validator-error" placeholder="namn eller signatur">
+            <p class="error-text hidden" id="validator-error"></p>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn--primary" id="submit"
+                {% if not versions %}disabled{% endif %}>
+          <span class="spinner hidden" id="spinner" aria-hidden="true"></span>
+          <span id="submit-label">Föreslå kod</span>
+        </button>
+        <p class="error-text hidden" id="form-error" role="alert"></p>
+      </form>
+    </section>
+
+    <!-- 2 ----------------------------------------------------------- result -->
+    <div id="resultat" aria-live="polite" aria-atomic="false">
+
+      <!-- 2a: a suggestion -->
+      <section class="card card--result card--suggestion hidden" id="state-suggestion"
+               aria-labelledby="forslag-rubrik" tabindex="-1">
+        <span class="status-label status-label--suggestion">Förslag</span>
+        <h2 id="forslag-rubrik" class="visually-hidden">Föreslagen kod</h2>
+        <div class="code-display">
+          <span class="code" id="s-code"></span>
+          <span class="term" id="s-term"></span>
+        </div>
+        <p class="meta-line hidden" id="s-context"></p>
+        <p class="meta-line" id="s-confidence"></p>
+        <p class="reason-line" id="s-reason"></p>
+
+        <div class="actions" id="s-actions">
+          <button type="button" class="btn btn--accept" id="btn-accept">Godkänn förslaget</button>
+          <button type="button" class="btn btn--reject" id="btn-reject">Avslå</button>
+          <button type="button" class="btn" id="btn-correct">Korrigera…</button>
+        </div>
+      </section>
+
+      <!-- 2b: no good match -->
+      <section class="card card--result card--nomatch hidden" id="state-nomatch"
+               aria-labelledby="ingen-rubrik" tabindex="-1">
+        <span class="status-label status-label--nomatch">Ingen tillräcklig träff</span>
+        <h2 id="ingen-rubrik">Ingen kod föreslås</h2>
+        <p id="n-summary"></p>
+        <p class="meta-line" id="n-why"></p>
+        <div class="actions">
+          <button type="button" class="btn btn--reject" id="btn-nomatch-confirm">Bekräfta: ingen kod</button>
+          <button type="button" class="btn" id="btn-nomatch-correct">Ange kod manuellt…</button>
+        </div>
+      </section>
+
+      <!-- 2c: reranking failed -->
+      <section class="card card--result card--failed hidden" id="state-failed"
+               aria-labelledby="fel-rubrik" tabindex="-1">
+        <span class="status-label status-label--failed">Omrankning misslyckades</span>
+        <h2 id="fel-rubrik">Modellen kunde inte rangordna kandidaterna</h2>
+        <p id="f-summary">
+          Försöket är registrerat i loggen. Kandidaterna nedan hämtades utan
+          modellens hjälp, och du kan fatta beslut ändå.
+        </p>
+        <div class="actions">
+          <button type="button" class="btn btn--reject" id="btn-failed-reject">Avslå</button>
+          <button type="button" class="btn" id="btn-failed-correct">Ange kod manuellt…</button>
+        </div>
+      </section>
+
+      <!-- shared: manual code entry -->
+      <section class="card hidden" id="correct-block" aria-labelledby="korr-rubrik">
+        <h2 id="korr-rubrik">Ange rätt kod</h2>
+        <div class="field-row">
+          <div class="field">
+            <label for="final_code">Kod</label>
+            <span class="hint" id="code-hint"></span>
+            <input type="text" id="final_code" maxlength="32"
+                   aria-describedby="code-hint code-error">
+            <p class="error-text hidden" id="code-error" role="alert"></p>
+          </div>
+          <div class="field" style="flex: 2 1 260px;">
+            <label for="note">Kommentar <span class="hint" style="display:inline">(valfri)</span></label>
+            <span class="hint" id="note-hint">Till exempel varför förslaget var fel.</span>
+            <input type="text" id="note" maxlength="500" aria-describedby="note-hint">
+          </div>
+        </div>
+        <div class="actions" style="border-top:none; padding-top:0; margin-top:0;">
+          <button type="button" class="btn btn--primary" id="btn-correct-submit">Registrera kod</button>
+          <button type="button" class="btn" id="btn-correct-cancel">Avbryt</button>
+        </div>
+      </section>
+
+      <!-- shared: confirmation -->
+      <section class="card hidden" id="confirm-block" aria-labelledby="bekr-rubrik" role="group">
+        <h2 id="bekr-rubrik">Bekräfta beslutet</h2>
+        <p id="confirm-text"></p>
+        <p class="meta-line">Beslutet sparas permanent och kan inte ändras eller tas bort.</p>
+        <div class="actions" style="border-top:none; padding-top:0; margin-top:0;">
+          <button type="button" class="btn btn--primary" id="btn-confirm-yes">Ja, registrera</button>
+          <button type="button" class="btn" id="btn-confirm-no">Avbryt</button>
+        </div>
+      </section>
+
+      <!-- 2d: decision recorded -->
+      <section class="card card--result card--decided hidden" id="state-decided"
+               aria-labelledby="beslut-rubrik" tabindex="-1">
+        <span class="status-label status-label--decided">Beslut registrerat</span>
+        <h2 id="beslut-rubrik">Beslutet är sparat</h2>
+        <dl class="dl" id="d-fields"></dl>
+        <details id="d-json-wrap">
+          <summary>Visa validerad kartläggning som JSON</summary>
+          <div class="details-body"><pre class="trace-row" id="d-json" style="margin:0"></pre></div>
+        </details>
+      </section>
+
+      <!-- 3 --------------------------------------------------- evidence -->
+      <section class="card hidden" id="evidence" aria-labelledby="kand-rubrik">
+        <h2 id="kand-rubrik">Kandidater och underlag</h2>
+        <p class="table-legend" id="table-legend">
+          — betyder att kandidaten inte återfanns av det steget.
+          Blå kantlinje markerar en lexikal träff.
+        </p>
+        <div class="table-scroll">
+          <table aria-describedby="table-legend">
+            <caption id="table-caption"></caption>
+            <thead>
+              <tr>
+                <th scope="col">Kod</th>
+                <th scope="col">Term</th>
+                <th scope="col">Källa</th>
+                <th scope="col">Träff i</th>
+                <th scope="col" class="num">Lexikal</th>
+                <th scope="col" class="num">Vektor</th>
+                <th scope="col" class="num">RRF</th>
+                <th scope="col" class="num">Modellrang</th>
+                <th scope="col" class="num" id="th-confidence">Modellens säkerhet</th>
+                <th scope="col">Motivering</th>
+              </tr>
+            </thead>
+            <tbody id="cand-rows"></tbody>
+          </table>
+        </div>
+        <div class="actions" style="border-top:none; padding-top:var(--s-3); margin-top:0;">
+          <button type="button" class="btn btn--small hidden" id="btn-show-all"></button>
+        </div>
+
+        <!-- 4 ------------------------------------------------ traceability -->
+        <details id="trace">
+          <summary>Spårbarhet</summary>
+          <div class="details-body" id="trace-body"></div>
+        </details>
+      </section>
     </div>
+  </main>
 
-    <div class="err hidden" id="decide-error"></div>
-
-    <div class="prov" id="provenance"></div>
-  </div>
-
-  <div class="panel decided hidden" id="decided">
-    <h2>Beslut registrerat</h2>
-    <div id="d-summary"></div>
-    <div class="prov" id="d-ids"></div>
-  </div>
-
-  <p class="prov">
-    Reranking: <code>{{ llm_provider }} / {{ llm_model }}</code> ·
-    Inbäddning: <code>{{ embedding_provider }} / {{ embedding_model }}</code>
-  </p>
+  <footer class="site-footer">
+    <p>
+      Rankning: <code>{{ llm_provider }} / {{ llm_model }}</code> ·
+      Inbäddning: <code>{{ embedding_provider }} / {{ embedding_model }}</code> ·
+      Version {{ app_version }}
+    </p>
+  </footer>
 </div>
 
-<script>
-"use strict";
-// Deliberately no framework and no build step. The interesting part of this
-// project is the audit trail, not the front end.
-
-const $ = (id) => document.getElementById(id);
-let proposal = null;
-
-const fmt = (x, digits = 3) =>
-  (x === null || x === undefined) ? "—" : Number(x).toFixed(digits);
-
-function show(el, visible) { el.classList.toggle("hidden", !visible); }
-
-function setError(el, message) {
-  el.textContent = message || "";
-  show(el, Boolean(message));
-}
-
-$("map-form").addEventListener("submit", async (event) => {
-  event.preventDefault();
-  setError($("form-error"), "");
-  show($("decided"), false);
-  const [system, version] = $("target").value.split("|");
-  $("submit").disabled = true;
-  try {
-    const response = await fetch("/map", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: $("text").value, target_system: system, version }),
-    });
-    const body = await response.json();
-    if (!response.ok) throw new Error(body.detail || response.statusText);
-    proposal = body;
-    render(body);
-  } catch (err) {
-    setError($("form-error"), String(err.message || err));
-    show($("result"), false);
-  } finally {
-    $("submit").disabled = false;
-  }
-});
-
-function render(p) {
-  show($("result"), true);
-  setError($("decide-error"), "");
-  show($("correct-block"), false);
-
-  const hasSuggestion = Boolean(p.suggested_code);
-  $("r-code").textContent = hasSuggestion ? p.suggested_code : "Inget förslag";
-  $("r-term").textContent = p.suggested_term || "";
-  $("r-conf").textContent = hasSuggestion
-    ? `Modellens säkerhet: ${fmt(p.model_confidence, 2)} — modellens egen skattning, inte en kalibrerad sannolikhet.`
-    : (p.status === "rerank_failed"
-        ? "Rerankingen misslyckades. Kandidaterna nedan är hämtade utan modellens hjälp."
-        : "Modellen bedömde att ingen kandidat passar.");
-  setError($("r-notes"), p.notes ? `Modellens anteckning: ${p.notes}` : "");
-
-  const ranked = $("r-ranked");
-  ranked.innerHTML = "";
-  for (const r of p.ranked) {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td class="mono">${esc(r.code)}</td><td>${esc(r.preferred_term || "")}</td>` +
-      `<td class="num">${fmt(r.model_confidence, 2)}</td><td>${esc(r.reason)}</td>`;
-    ranked.appendChild(tr);
-  }
-  show($("alt-block"), p.ranked.length > 0);
-
-  const cands = $("r-candidates");
-  cands.innerHTML = "";
-  for (const c of p.candidates) {
-    const tr = document.createElement("tr");
-    const tags = c.sources.map((s) => `<span class="tag">${esc(s)}</span>`).join("");
-    tr.innerHTML = `<td class="mono">${esc(c.code)}</td><td>${esc(c.preferred_term)}</td>` +
-      `<td>${tags}</td><td class="num">${fmt(c.lexical_score)}</td>` +
-      `<td class="num">${fmt(c.vector_score)}</td><td class="num">${fmt(c.fused_score, 5)}</td>`;
-    cands.appendChild(tr);
-  }
-
-  $("btn-accept").disabled = !hasSuggestion;
-  $("action-hint").textContent = hasSuggestion
-    ? "" : "Inget förslag att godkänna — avslå eller korrigera.";
-  show($("actions"), true);
-
-  $("provenance").innerHTML =
-    `Förslag <code>${esc(p.id)}</code> · spårnings-id <code>${esc(p.trace_id)}</code><br>` +
-    `${esc(p.target_system)} ${esc(p.terminology_version)} · ` +
-    `modell <code>${esc(p.llm_provider)}/${esc(p.llm_model)}</code> · ` +
-    `prompt <code>${esc(p.prompt_id)}</code> sha256 <code>${esc(p.prompt_hash)}</code><br>` +
-    `hämtning ${p.latency_ms_retrieval} ms · reranking ${p.latency_ms_rerank} ms`;
-}
-
-$("btn-accept").addEventListener("click", () => decide("accept", null));
-$("btn-reject").addEventListener("click", () => decide("reject", null));
-$("btn-correct").addEventListener("click", () => {
-  show($("correct-block"), true);
-  $("final_code").focus();
-});
-$("btn-correct-submit").addEventListener("click", () =>
-  decide("correct", $("final_code").value.trim()));
-
-async function decide(kind, finalCode) {
-  if (!proposal) return;
-  setError($("decide-error"), "");
-  const payload = {
-    proposal_id: proposal.id,
-    decision: kind,
-    final_code: finalCode || null,
-    validator_note: $("note").value.trim() || null,
-    validator_id: $("validator_id").value.trim(),
-  };
-  if (!payload.validator_id) {
-    setError($("decide-error"), "Ange vem som validerar innan du registrerar ett beslut.");
-    return;
-  }
-  try {
-    const response = await fetch("/decisions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    const body = await response.json();
-    if (!response.ok) throw new Error(detailOf(body) || response.statusText);
-    showDecision(body);
-  } catch (err) {
-    setError($("decide-error"), String(err.message || err));
-  }
-}
-
-function detailOf(body) {
-  if (typeof body.detail === "string") return body.detail;
-  if (Array.isArray(body.detail)) return body.detail.map((d) => d.msg).join("; ");
-  return null;
-}
-
-function showDecision(p) {
-  const d = p.decision;
-  const words = { accept: "Godkänt", reject: "Avslaget", correct: "Korrigerat" };
-  let text = `<strong>${esc(words[d.decision] || d.decision)}</strong> av ` +
-             `${esc(d.validator_id)}.`;
-  if (d.final_code) {
-    text += ` Validerad kod: <span class="mono"><strong>${esc(d.final_code)}</strong></span>` +
-            ` i ${esc(p.target_system)} ${esc(p.terminology_version)}.`;
-  } else {
-    text += " Ingen kod registrerad.";
-  }
-  if (d.validator_note) text += `<br>Kommentar: ${esc(d.validator_note)}`;
-  $("d-summary").innerHTML = text;
-  $("d-ids").innerHTML =
-    `Förslag <code>${esc(p.id)}</code> · beslut <code>${esc(d.id)}</code><br>` +
-    (p.validated_mapping
-      ? `Validerad kartläggning: <code>${esc(JSON.stringify(p.validated_mapping))}</code>`
-      : "");
-  show($("decided"), true);
-  show($("actions"), false);
-  show($("correct-block"), false);
-  $("decided").scrollIntoView({ behavior: "smooth", block: "nearest" });
-}
-
-function esc(value) {
-  return String(value === null || value === undefined ? "" : value)
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-</script>
+<script src="/static/validator.js"></script>
 </body>
 </html>

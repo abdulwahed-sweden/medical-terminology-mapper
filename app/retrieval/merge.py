@@ -49,6 +49,10 @@ def merge_candidates(
             existing.lexical_rank = candidate.lexical_rank
             existing.ts_rank = candidate.ts_rank
             existing.trgm_similarity = candidate.trgm_similarity
+            existing.strict_similarity = candidate.strict_similarity
+            # A lexical attribution is more informative than "vector", so it
+            # wins when both stages returned the same concept.
+            existing.matched_field = candidate.matched_field
         if candidate.vector_score is not None:
             existing.vector_score = candidate.vector_score
             existing.vector_rank = candidate.vector_rank
