@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: lint · types · tests
+    runs-on: ubuntu-latest
+
+    services:
+      # The tests need a real PostgreSQL with pgvector and pg_trgm: the
+      # append-only trigger, the `swedish` text search configuration and the
+      # vector index are what is under test, so a substitute would prove
+      # nothing.
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: mtm
+          POSTGRES_PASSWORD: mtm
+          POSTGRES_DB: mtm
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mtm -d mtm"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      DATABASE_URL: postgresql+psycopg://mtm:mtm@localhost:5432/mtm
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Format
+        run: ruff format --check .
+
+      - name: Type-check
+        run: mypy app/
+
+      - name: Test
+        # No API keys are configured, so the live provider smoke tests skip and
+        # the suite still runs green -- that is the point of the fakes.
+        run: pytest -q --cov=app --cov=evaluation --cov-report=term-missing
+
+      - name: Quick start smoke test
+        # Proves the documented no-API-key path actually works: migrate, load
+        # the sample fixtures, embed, map a term, and check the proposal is
+        # pending with no decision.
+        run: |
+          alembic upgrade head
+          python scripts/load_terminology.py --system icd10se --version 2026-sample \
+            --file tests/fixtures/icd10se_sample.txt
+          python scripts/embed_terminology.py --system icd10se --version 2026-sample \
+            --provider fake
+          python evaluation/run_eval.py --gold evaluation/gold/sample_icd10se.csv \
+            --system icd10se --version 2026-sample --provider fake
