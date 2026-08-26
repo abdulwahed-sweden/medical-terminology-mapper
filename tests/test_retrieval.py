@@ -10,8 +10,12 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.embeddings.fake import FakeEmbeddingProvider
+from app.models.candidate import Candidate
 from app.normalize.swedish import normalize
 from app.retrieval.lexical import lexical_search
+from app.retrieval.merge import merge_candidates
+from app.retrieval.vector import vector_search
 
 pytestmark = pytest.mark.requires_db
 
@@ -143,3 +147,211 @@ def test_empty_query_returns_nothing(db_session: Session, icd10se_loaded: str) -
 
 def test_nonsense_query_returns_nothing(db_session: Session, icd10se_loaded: str) -> None:
     assert _lexical(db_session, "qzxwvk lorem ipsum", icd10se_loaded) == []
+
+
+# -------------------------------------------------------------------- vector
+
+
+def test_vector_search_returns_neighbours(
+    db_session: Session, icd10se_embedded: str, embedding_provider: FakeEmbeddingProvider
+) -> None:
+    query_vector = embedding_provider.embed([normalize("högt blodtryck").normalized])[0]
+    results = vector_search(
+        db_session,
+        query_vector=query_vector,
+        system="icd10se",
+        version=icd10se_embedded,
+        provider=embedding_provider.provider_id,
+        model=embedding_provider.model_id,
+        top_k=5,
+    )
+    assert results
+    assert "I10" in [c.code for c in results]
+    assert results[0].sources == ["vector"]
+    assert results[0].vector_rank == 1
+
+
+def test_vector_scores_are_similarities_not_distances(
+    db_session: Session, icd10se_embedded: str, embedding_provider: FakeEmbeddingProvider
+) -> None:
+    """Larger must mean better, like every other score in the pipeline."""
+    query_vector = embedding_provider.embed([normalize("astma").normalized])[0]
+    results = vector_search(
+        db_session,
+        query_vector=query_vector,
+        system="icd10se",
+        version=icd10se_embedded,
+        provider=embedding_provider.provider_id,
+        model=embedding_provider.model_id,
+        top_k=10,
+    )
+    scores = [c.vector_score for c in results]
+    assert all(score is not None and -1.0 <= score <= 1.0 for score in scores)
+    assert scores == sorted(scores, reverse=True)  # type: ignore[type-var]
+
+
+def test_vector_search_is_scoped_to_its_vector_space(
+    db_session: Session, icd10se_embedded: str, embedding_provider: FakeEmbeddingProvider
+) -> None:
+    """Vectors from a different model live in an unrelated space.
+
+    Silently searching across models would return confident nonsense, so the
+    filter must exclude rather than fall back.
+    """
+    query_vector = embedding_provider.embed(["astma"])[0]
+    results = vector_search(
+        db_session,
+        query_vector=query_vector,
+        system="icd10se",
+        version=icd10se_embedded,
+        provider=embedding_provider.provider_id,
+        model="some-other-model",
+        top_k=5,
+    )
+    assert results == []
+
+
+def test_vector_search_excludes_code_intervals(
+    db_session: Session, icd10se_embedded: str, embedding_provider: FakeEmbeddingProvider
+) -> None:
+    query_vector = embedding_provider.embed(["cirkulationsorganens sjukdomar"])[0]
+    results = vector_search(
+        db_session,
+        query_vector=query_vector,
+        system="icd10se",
+        version=icd10se_embedded,
+        provider=embedding_provider.provider_id,
+        model=embedding_provider.model_id,
+        top_k=20,
+    )
+    assert results
+    assert not any("-" in c.code for c in results)
+
+
+# --------------------------------------------------------------------- merge
+
+
+def _candidate(code: str, **kwargs: object) -> Candidate:
+    base: dict[str, object] = {
+        "system": "icd10se",
+        "version": "2026-sample",
+        "code": code,
+        "preferred_term": f"term for {code}",
+    }
+    base.update(kwargs)
+    return Candidate(**base)  # type: ignore[arg-type]
+
+
+def test_merge_deduplicates_and_keeps_both_scores() -> None:
+    lexical = [_candidate("I10", sources=["lexical"], lexical_score=0.9, lexical_rank=1)]
+    vector = [_candidate("I10", sources=["vector"], vector_score=0.42, vector_rank=3)]
+
+    merged = merge_candidates(lexical, vector)
+
+    assert len(merged) == 1
+    only = merged[0]
+    assert only.sources == ["lexical", "vector"]
+    assert only.lexical_score == 0.9
+    assert only.vector_score == 0.42
+    assert only.lexical_rank == 1
+    assert only.vector_rank == 3
+
+
+def test_merge_leaves_absent_scores_null() -> None:
+    merged = merge_candidates(
+        [_candidate("I10", sources=["lexical"], lexical_score=0.9, lexical_rank=1)],
+        [_candidate("I15", sources=["vector"], vector_score=0.5, vector_rank=1)],
+    )
+    by_code = {c.code: c for c in merged}
+    assert by_code["I10"].vector_score is None
+    assert by_code["I10"].vector_rank is None
+    assert by_code["I15"].lexical_score is None
+    assert by_code["I15"].ts_rank is None
+
+
+def test_reciprocal_rank_fusion_rewards_agreement() -> None:
+    """A concept both stages ranked well beats one only a single stage liked,
+    even when that single stage ranked it first."""
+    lexical = [
+        _candidate("BOTH", sources=["lexical"], lexical_score=0.5, lexical_rank=2),
+        _candidate("LEX_ONLY", sources=["lexical"], lexical_score=0.99, lexical_rank=1),
+    ]
+    vector = [
+        _candidate("BOTH", sources=["vector"], vector_score=0.5, vector_rank=2),
+        _candidate("VEC_ONLY", sources=["vector"], vector_score=0.99, vector_rank=1),
+    ]
+
+    merged = merge_candidates(lexical, vector, rrf_k=60)
+
+    assert merged[0].code == "BOTH"
+    assert merged[0].fused_score == pytest.approx(2 / 62)
+    assert merged[1].fused_score == pytest.approx(1 / 61)
+
+
+def test_merge_respects_the_cap() -> None:
+    lexical = [
+        _candidate(f"X{i:02d}", sources=["lexical"], lexical_score=1.0 - i / 100, lexical_rank=i)
+        for i in range(1, 21)
+    ]
+    assert len(merge_candidates(lexical, [], cap=15)) == 15
+    assert len(merge_candidates(lexical, [])) == 20
+
+
+def test_merge_is_deterministic_for_tied_scores() -> None:
+    """Identical inputs must produce an identical ordering.
+
+    A proposal whose candidate order varies run to run is not reproducible, and
+    a non-reproducible proposal is a poor audit record.
+    """
+    lexical = [
+        _candidate("I15", sources=["lexical"], lexical_score=1.0, lexical_rank=1),
+        _candidate("I10", sources=["lexical"], lexical_score=1.0, lexical_rank=1),
+    ]
+    first = [c.code for c in merge_candidates(lexical, [])]
+    second = [c.code for c in merge_candidates(list(reversed(lexical)), [])]
+    assert first == second == ["I10", "I15"]
+
+
+def test_merge_of_two_empty_lists() -> None:
+    assert merge_candidates([], []) == []
+
+
+def test_merge_does_not_mutate_its_inputs() -> None:
+    lexical = [_candidate("I10", sources=["lexical"], lexical_score=0.9, lexical_rank=1)]
+    vector = [_candidate("I10", sources=["vector"], vector_score=0.4, vector_rank=1)]
+
+    merge_candidates(lexical, vector)
+
+    assert lexical[0].sources == ["lexical"]
+    assert lexical[0].vector_score is None
+    assert lexical[0].fused_score == 0.0
+
+
+def test_full_retrieval_path_merges_both_stages(
+    db_session: Session, icd10se_embedded: str, embedding_provider: FakeEmbeddingProvider
+) -> None:
+    """End to end: both stages contribute, and the overlap rises to the top."""
+    query = normalize("högt blodtryck").normalized
+    lexical = lexical_search(
+        db_session,
+        query=query,
+        system="icd10se",
+        version=icd10se_embedded,
+        top_k=20,
+        trigram_threshold=SETTINGS.trigram_threshold,
+    )
+    vector = vector_search(
+        db_session,
+        query_vector=embedding_provider.embed([query])[0],
+        system="icd10se",
+        version=icd10se_embedded,
+        provider=embedding_provider.provider_id,
+        model=embedding_provider.model_id,
+        top_k=20,
+    )
+    merged = merge_candidates(lexical, vector, rrf_k=SETTINGS.rrf_k, cap=15)
+
+    assert merged[0].code == "I10"
+    assert merged[0].sources == ["lexical", "vector"]
+    # Vector-only candidates the lexical stage never saw are still present.
+    assert any(c.sources == ["vector"] for c in merged)

@@ -112,3 +112,45 @@ def kva_loaded(db_session: Session) -> str:
     ]
     upsert_concepts(db_session, concepts)
     return SAMPLE_VERSION
+
+
+@pytest.fixture
+def embedding_provider() -> "FakeEmbeddingProvider":  # noqa: F821
+    from app.config import get_settings
+    from app.embeddings.fake import FakeEmbeddingProvider
+
+    return FakeEmbeddingProvider(dim=get_settings().embedding_dim)
+
+
+@pytest.fixture
+def icd10se_embedded(
+    db_session: Session, icd10se_loaded: str, embedding_provider: object
+) -> str:
+    """Embed the loaded ICD-10-SE sample with the deterministic fake provider."""
+    import sqlalchemy as sa
+
+    from app.db.models import ConceptEmbeddingRow, ConceptRow
+
+    provider = embedding_provider
+    rows = db_session.execute(
+        sa.select(ConceptRow.code, ConceptRow.search_text)
+        .where(ConceptRow.system == "icd10se", ConceptRow.version == icd10se_loaded)
+        .order_by(ConceptRow.code)
+    ).all()
+    vectors = provider.embed([r.search_text for r in rows])  # type: ignore[attr-defined]
+    db_session.add_all(
+        [
+            ConceptEmbeddingRow(
+                system="icd10se",
+                version=icd10se_loaded,
+                code=row.code,
+                provider=provider.provider_id,  # type: ignore[attr-defined]
+                model=provider.model_id,  # type: ignore[attr-defined]
+                dim=provider.dim,  # type: ignore[attr-defined]
+                embedding=vector,
+            )
+            for row, vector in zip(rows, vectors, strict=True)
+        ]
+    )
+    db_session.flush()
+    return icd10se_loaded
