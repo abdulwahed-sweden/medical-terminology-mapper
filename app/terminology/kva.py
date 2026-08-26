@@ -11,6 +11,17 @@ the column set is discovered from the header rather than assumed by position,
 and the two files are loaded into the same `kva` system with one
 `load()` call each.
 
+Both the `.xlsx` and `.tsv` distributions are read; see
+`app.terminology.base.read_classification_file`. The published workbook merges
+KKÅ and KMÅ into one sheet and carries no `Överordnad kod` column, so a KVÅ
+load from it has no parent links -- a property of the source, which the reader
+warns about rather than papering over.
+
+FORMAT VERIFIED (2026-08-26) against the real release
+`kva-inkl-beskrivningstexter-2026.xlsx`: 11 888 concepts parsed, matching the
+count the workbook states for itself, with 9 of its 10 named columns mapping to
+the header aliases below. See LICENSING.md §3.
+
 Code shape (verified against the published KVÅ 2026 release):
   * KKÅ codes are three letters + two digits  -- AAA00, FNG05, VAN33
   * KMÅ codes are two letters + three digits  -- AA001, AF015, SS104
@@ -29,7 +40,7 @@ from app.terminology.base import (
     Concept,
     assign_hierarchy,
     collect_synonyms,
-    read_classification_tsv,
+    read_classification_file,
 )
 
 KVA_CODE_RE = re.compile(r"^([A-Z]{3}[0-9]{2}|[A-Z]{2}[0-9]{3})$")
@@ -47,7 +58,7 @@ class KVA:
 
     def load(self, path: Path, version: str) -> Iterable[Concept]:
         concepts: list[Concept] = []
-        for code, rows in read_classification_tsv(path):
+        for code, rows in read_classification_file(path):
             title = next((row["title"] for row in rows if row.get("title")), None)
             if title is None:
                 continue

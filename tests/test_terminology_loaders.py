@@ -248,3 +248,172 @@ def test_valid_kva_codes(code: str) -> None:
 )
 def test_invalid_kva_codes(code: str) -> None:
     assert KVA().validate_code_format(code) is False
+
+
+# ---------------------------------------------------------------- XLSX input
+
+# The classifications are published as spreadsheets as well as tab-separated
+# text -- KVÅ 2026 is distributed publicly only as .xlsx. Both formats must
+# produce byte-identical concepts, because which one an operator happens to
+# download must not change what ends up in the database.
+
+
+def _write_xlsx(
+    path: Path,
+    header: list[object],
+    rows: list[list[object]],
+    *,
+    sheet_title: str = "Data",
+    preamble_sheet: str | None = None,
+    lead_rows: list[list[object]] | None = None,
+) -> Path:
+    import openpyxl
+
+    workbook = openpyxl.Workbook()
+    first = workbook.active
+    if preamble_sheet is not None:
+        # Mirrors the published KVÅ workbook, which opens with a "Läs mig"
+        # sheet carrying no header row at all.
+        first.title = preamble_sheet
+        first.append(["KVÅ 2026 (giltig från 2026-01-01)"])
+        first.append(["2025-10-24 - version 1.0"])
+        sheet = workbook.create_sheet(sheet_title)
+    else:
+        first.title = sheet_title
+        sheet = first
+
+    for lead in lead_rows or []:
+        sheet.append(lead)
+    sheet.append(header)
+    for row in rows:
+        sheet.append(row)
+    workbook.save(path)
+    return path
+
+
+def _tsv_to_xlsx(source: Path, target: Path, **kwargs: object) -> Path:
+    """Rewrite a fixture TSV as a workbook, cell for cell."""
+    import csv as _csv
+
+    with source.open("r", encoding="utf-8", newline="") as handle:
+        table = list(_csv.reader(handle, delimiter="\t", quotechar='"'))
+    return _write_xlsx(target, list(table[0]), [list(r) for r in table[1:]], **kwargs)  # type: ignore[arg-type]
+
+
+def test_icd10se_xlsx_and_tsv_agree(tmp_path: Path) -> None:
+    """The strongest form of the guarantee: same concepts, either format."""
+    workbook = _tsv_to_xlsx(ICD10SE_SAMPLE, tmp_path / "icd10se.xlsx")
+
+    from_tsv = list(ICD10SE().load(ICD10SE_SAMPLE, "2026-sample"))
+    from_xlsx = list(ICD10SE().load(workbook, "2026-sample"))
+
+    assert len(from_xlsx) == 25
+    assert [c.model_dump() for c in from_xlsx] == [c.model_dump() for c in from_tsv]
+
+
+def test_kva_xlsx_and_tsv_agree(tmp_path: Path) -> None:
+    workbook = _tsv_to_xlsx(KKA_SAMPLE, tmp_path / "kka.xlsx")
+    from_tsv = list(KVA().load(KKA_SAMPLE, "2026-sample"))
+    from_xlsx = list(KVA().load(workbook, "2026-sample"))
+    assert [c.model_dump() for c in from_xlsx] == [c.model_dump() for c in from_tsv]
+
+
+def test_multi_row_merge_works_in_xlsx_too(tmp_path: Path) -> None:
+    """I10 spans two rows for its two Innefattar values, in either format."""
+    workbook = _tsv_to_xlsx(ICD10SE_SAMPLE, tmp_path / "icd10se.xlsx")
+    by_code = {c.code: c for c in ICD10SE().load(workbook, "2026-sample")}
+    assert "Högt blodtryck" in by_code["I10"].synonyms
+    assert any("arteriell" in s for s in by_code["I10"].synonyms)
+
+
+def test_leading_metadata_sheet_is_skipped(tmp_path: Path) -> None:
+    """The published KVÅ workbook opens with a 'Läs mig' sheet."""
+    workbook = _tsv_to_xlsx(
+        KKA_SAMPLE, tmp_path / "kka.xlsx", preamble_sheet="Läs mig", sheet_title="KVÅ"
+    )
+    codes = {c.code for c in KVA().load(workbook, "2026-sample")}
+    assert "EMA00" in codes
+    assert "KVÅ 2026 (giltig från 2026-01-01)" not in codes
+
+
+def test_header_below_a_title_row_is_found(tmp_path: Path) -> None:
+    workbook = _tsv_to_xlsx(
+        KKA_SAMPLE,
+        tmp_path / "kka.xlsx",
+        lead_rows=[["Hela klassifikationen KKÅ"], [], ["giltig från 2026-01-01"]],
+    )
+    assert {c.code for c in KVA().load(workbook, "2026-sample")} >= {"EMA00", "AAA00"}
+
+
+def test_unknown_and_empty_columns_are_ignored(tmp_path: Path) -> None:
+    """The real KVÅ workbook carries a `Klassifikation` column with no TSV
+    counterpart, and a trailing empty column."""
+    workbook = _write_xlsx(
+        tmp_path / "kva.xlsx",
+        ["Klassifikation", "Kod", "Titel", "Innefattar", None],
+        [
+            ["KVÅ-medicinska åtgärder (KMÅ)", "AF015", "Blodtrycksmätning standard", None, None],
+            ["KVÅ-kirurgiska åtgärder (KKÅ)", "AAA00", "Explorativ kraniotomi", None, None],
+        ],
+    )
+    concepts = {c.code: c for c in KVA().load(workbook, "2026")}
+    assert concepts["AF015"].preferred_term == "Blodtrycksmätning standard"
+    assert concepts["AAA00"].preferred_term == "Explorativ kraniotomi"
+    assert concepts["AF015"].synonyms == []
+
+
+def test_non_string_cells_are_coerced(tmp_path: Path) -> None:
+    """A spreadsheet may hand back numbers or dates where the TSV had text."""
+    import datetime as dt
+
+    workbook = _write_xlsx(
+        tmp_path / "icd.xlsx",
+        ["Kod", "Giltig från", "Titel"],
+        [["I10", dt.datetime(1997, 1, 1), "Essentiell hypertoni"]],
+    )
+    concepts = list(ICD10SE().load(workbook, "2026"))
+    assert concepts[0].code == "I10"
+    assert concepts[0].preferred_term == "Essentiell hypertoni"
+
+
+def test_workbook_without_a_usable_header_is_reported(tmp_path: Path) -> None:
+    workbook = _write_xlsx(
+        tmp_path / "bad.xlsx", ["Something", "Else"], [["a", "b"]], sheet_title="Blad1"
+    )
+    with pytest.raises(TerminologyFormatError, match="no sheet has a header row"):
+        list(ICD10SE().load(workbook, "2026"))
+
+
+def test_workbook_error_names_the_sheets_examined(tmp_path: Path) -> None:
+    workbook = _write_xlsx(
+        tmp_path / "bad.xlsx", ["Nope"], [["x"]], sheet_title="Blad1", preamble_sheet="Läs mig"
+    )
+    with pytest.raises(TerminologyFormatError, match="Läs mig"):
+        list(KVA().load(workbook, "2026"))
+
+
+def test_a_source_without_parent_links_still_loads(tmp_path: Path) -> None:
+    """The published KVÅ workbook has no `Överordnad kod` column.
+
+    The hierarchy is then flat -- correctly so, since the source carries none.
+    A warning is logged, because a silently flat hierarchy is easy to miss.
+    """
+    workbook = _write_xlsx(
+        tmp_path / "kva.xlsx",
+        ["Kod", "Titel"],
+        [["AF015", "Blodtrycksmätning standard"], ["AA001", "Adenosintest"]],
+    )
+    concepts = list(KVA().load(workbook, "2026"))
+    assert len(concepts) == 2
+    assert all(c.parent_code is None for c in concepts)
+    assert all(c.chapter is None for c in concepts)
+    assert all(c.is_leaf for c in concepts)
+
+
+def test_missing_parent_column_is_logged(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    workbook = _write_xlsx(tmp_path / "kva.xlsx", ["Kod", "Titel"], [["AF015", "x"]])
+    with caplog.at_level("WARNING"):
+        list(KVA().load(workbook, "2026"))
+    assert any(
+        r.getMessage() == "classification_source_has_no_parent_column" for r in caplog.records
+    )

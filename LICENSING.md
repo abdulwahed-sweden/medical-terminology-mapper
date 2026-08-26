@@ -35,15 +35,33 @@ https://www.socialstyrelsen.se/statistik-och-data/klassifikationer-och-koder/kod
 | SNOMED CT | <https://www.ehalsomyndigheten.se/verksamhet/ndi/interoperabilitet/snomed-ct/> |
 | Browsable search service | <https://klassifikationer.socialstyrelsen.se/> |
 
-> **Where the machine-readable files are.** The public pages listed above
-> currently offer the PDF publications and, for KVÅ, an XLSX. The tab-separated
-> **code-text files** (`.tsv`) — the ones the loaders in this repository are
-> written for — were previously linked from the Socialstyrelsen download page
-> and now appear to sit behind E-hälsomyndigheten's collaboration portal
-> (`samarbetsyta.ehalsomyndigheten.se`), which was not publicly reachable when
-> this was checked. If you cannot find them, contact the classification team;
-> the published contact address is `klassif@socialstyrelsen.se`.
-> Marked **UNVERIFIED** in `PHASE1_REPORT.md`.
+### Machine-readable distribution — what is actually downloadable
+
+Re-checked **2026-08-26**. The two classifications are *not* published the same
+way, which matters because it decides what the loaders can be verified against.
+
+| Classification | Machine-readable file | Status |
+| --- | --- | --- |
+| **KVÅ** | [`kva-inkl-beskrivningstexter-2026.xlsx`](https://www.ehalsomyndigheten.se/siteassets/ehm/2_verksamhet/ndi/interoperabilitet/klassifikationer/kva/kva-inkl-beskrivningstexter-2026.xlsx) (501 KB) | **Publicly downloadable.** Complete classification, 11 888 codes. Downloaded and parsed on 2026-08-26 — see §3. |
+| **ICD-10-SE** | none | **Not publicly downloadable.** The ICD-10 page offers only the three PDF volumes and the coding guidance. |
+
+The tab-separated **code-text files** (`.tsv`) that Socialstyrelsen previously
+published for both classifications are no longer linked from either public
+page. They appear to have moved behind E-hälsomyndigheten's collaboration
+portal (`samarbetsyta.ehalsomyndigheten.se`), which was not publicly reachable
+when this was checked.
+
+For ICD-10-SE specifically, no machine-readable file could be obtained:
+the page HTML contains no `.xlsx`, `.tsv`, `.csv` or `.zip` reference at all,
+and eleven candidate filenames following both sibling naming conventions
+(KVÅ's `<name>-inkl-beskrivningstexter-<year>.xlsx` and KSI's
+`<name>-<year>.xlsx`) all returned HTTP 404. If you have portal access or a
+copy, one file is all it takes to lift the remaining `FORMAT_UNVERIFIED` mark —
+see `PHASE1_REPORT.md`. The published contact address is
+`klassif@socialstyrelsen.se`.
+
+**The loaders read both formats** (`.tsv` and `.xlsx`), dispatching on the file
+extension, with the same tolerant header matching either way.
 
 ### Terms of use
 
@@ -62,6 +80,15 @@ repository redistributes none of it.
 ---
 
 ## 2. ICD-10-SE
+
+**ICD-10-SE is derived from WHO ICD-10.** The underlying classification is
+*International Statistical Classification of Diseases and Related Health
+Problems, Tenth Revision (ICD-10)*, published by the **World Health
+Organization** in 1992 and © World Health Organization 1992. ICD-10-SE is the
+Swedish-language version of it; the publications state that Socialstyrelsen is
+solely responsible for the Swedish translation. Any use of ICD-10-SE content is
+therefore subject to WHO's rights in ICD-10 as well as to the Swedish
+publisher's terms.
 
 - Current release: **svensk version 2026**, valid from **2026-01-01**.
 - OID: `1.2.752.116.1.1.1`
@@ -110,8 +137,33 @@ KVÅ is the union of two published classifications, distributed as two files:
   appear as group headings and are not assignable procedure codes.
 - KVÅ is mandatory for reporting to Socialstyrelsen's health data registers.
 
-Source for the formats: `beskrivning-filinnehall-kka.pdf`,
-`beskrivning-filinnehall-kma.pdf`, and `kva-inkl-beskrivningstexter-2026.xlsx`.
+### The published workbook, as parsed on 2026-08-26
+
+| | |
+| --- | --- |
+| File | `kva-inkl-beskrivningstexter-2026.xlsx` (501 KB) |
+| URL | <https://www.ehalsomyndigheten.se/siteassets/ehm/2_verksamhet/ndi/interoperabilitet/klassifikationer/kva/kva-inkl-beskrivningstexter-2026.xlsx> |
+| Downloaded | 2026-08-26 |
+| Sheets | `Läs mig` (metadata), `KVÅ – (KKÅ+KMÅ)` (data, header on row 1) |
+| Rows | 11 888 data rows, one per code — KKÅ and KMÅ merged into one sheet |
+| Columns | `Klassifikation`, `Kod`, `Titel`, `Beskrivning`, `Exempel`, `Innefattar`, `Utesluter`, `Kodningsinformation`, `Anmärkning`, `Relaterad ICF-kod`, plus one trailing empty column |
+
+Loading this file with `scripts/load_terminology.py` produces exactly 11 888
+concepts, matching the count the workbook states for itself.
+
+Two differences from the TSV layout the file-description PDFs document:
+
+- The workbook adds a **`Klassifikation`** column (KKÅ or KMÅ), which the TSVs
+  do not have — it exists because the workbook merges the two files. It maps to
+  no `Concept` field and is ignored.
+- The workbook has **no `Överordnad kod` column**, so KVÅ loaded from it has no
+  parent links: `chapter` is empty and every concept is a leaf. This is a real
+  loss of information relative to the TSV, not a parsing bug, and the loader
+  logs a warning (`classification_source_has_no_parent_column`) so it cannot
+  pass unnoticed.
+
+Source for the TSV formats: `beskrivning-filinnehall-kka.pdf` and
+`beskrivning-filinnehall-kma.pdf`.
 
 Load both files with the same `--version`; see the repository README.
 
@@ -153,11 +205,26 @@ purpose.
 | `tests/fixtures/kva_kma_sample.txt` | 9 codes in the 10-column KMÅ layout |
 | `evaluation/gold/sample_icd10se.csv` | 12-row sample gold set, marked `SAMPLE ONLY` |
 
-The **codes, Swedish titles, Latin terms, and inclusion/exclusion terms in these
-files were transcribed from the official publications cited above**, so that
+### Provenance of the rows
+
+Every row in these files is an **excerpt transcribed from a publication issued
+by E-hälsomyndigheten**, retrieved on **2026-08-26** from the URLs below. They
+are excerpts — a few dozen entries out of tens of thousands — reproduced so that
 retrieval and evaluation are exercised against real terminology rather than
-invented strings. Nothing was invented. The `Giltig från` values are
-placeholders and the loader ignores that column.
+invented strings. **Nothing was invented**, and no complete classification, or
+any substantial part of one, is reproduced.
+
+| Sample file | Transcribed from | Retrieved |
+| --- | --- | --- |
+| `tests/fixtures/icd10se_sample.txt` and `evaluation/gold/sample_icd10se.csv` | *ICD-10-SE — Systematisk förteckning, svensk version 2026*, Del 1–3 (artikelnummer `2026-1-9989`, `-9990`, `-9991`), PDF, `ehalsomyndigheten.se/siteassets/ehm/2_verksamhet/ndi/interoperabilitet/klassifikationer/icd-10/` | 2026-08-26 |
+| `tests/fixtures/kva_kka_sample.txt`, `tests/fixtures/kva_kma_sample.txt` | *KVÅ 2026 inkl. beskrivningstexter*, `kva-inkl-beskrivningstexter-2026.xlsx`, `ehalsomyndigheten.se/siteassets/ehm/2_verksamhet/ndi/interoperabilitet/klassifikationer/kva/` | 2026-08-26 |
+
+The ICD-10-SE excerpts carry the WHO copyright described in §2, since ICD-10-SE
+is a Swedish-language version of WHO ICD-10; the source is cited here as those
+publications require. The `Giltig från` values in the fixtures are
+placeholders, not transcribed, and the loader ignores that column. The KVÅ
+fixtures' `Överordnad kod` values are inferred from the code structure, because
+the published workbook carries no parent column.
 
 They are nonetheless tiny, partial, and structurally incomplete: `chapter` and
 `is_leaf` are correct *within the sample* and meaningless outside it. See

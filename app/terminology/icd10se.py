@@ -1,9 +1,20 @@
 """ICD-10-SE loader.
 
-ICD-10-SE is the Swedish version of ICD-10. It is NOT ICD-10-CM: the US
+ICD-10-SE is the Swedish version of WHO ICD-10. It is NOT ICD-10-CM: the US
 variant has a different code space, different rules and different tooling, and
 a US validator applied here would accept codes that do not exist in Sweden and
 reject codes that do. See LICENSING.md.
+
+Reads both `.xlsx` and `.tsv`; see
+`app.terminology.base.read_classification_file`.
+
+FORMAT_UNVERIFIED. The structure comes from the publisher's own file-description
+document, but as of 2026-08-26 no machine-readable ICD-10-SE release is publicly
+downloadable -- the ICD-10 page offers only PDFs -- so the exact header
+spellings have not been checked against a real file. The header matching is
+tolerant and a missing required column fails loudly. The sibling KVÅ loader,
+which shares this reader and alias table, *was* verified against its real
+release, which is indirect evidence that the approach holds. See LICENSING.md §1.
 """
 
 from __future__ import annotations
@@ -16,7 +27,7 @@ from app.terminology.base import (
     Concept,
     assign_hierarchy,
     collect_synonyms,
-    read_classification_tsv,
+    read_classification_file,
 )
 
 # Letter + two digits, optionally a dot and one or two alphanumerics.
@@ -37,7 +48,7 @@ class ICD10SE:
 
     def load(self, path: Path, version: str) -> Iterable[Concept]:
         concepts: list[Concept] = []
-        for code, rows in read_classification_tsv(path):
+        for code, rows in read_classification_file(path):
             title = next((row["title"] for row in rows if row.get("title")), None)
             if title is None:
                 # A code with no Titel carries no name to map to; skipping is

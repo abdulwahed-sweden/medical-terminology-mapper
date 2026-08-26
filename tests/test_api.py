@@ -233,7 +233,7 @@ def test_correct_rejects_a_code_absent_from_the_loaded_version(
         },
     )
     assert response.status_code == 422
-    assert "does not exist in version" in response.json()["detail"]
+    assert "not present in icd10se version 2026-sample" in response.json()["detail"]
 
 
 def test_correct_without_a_code_is_refused(client: TestClient, icd10se_embedded: str) -> None:

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import csv
 import html
+import logging
 import re
 import unicodedata
 from collections.abc import Iterable, Iterator, Mapping, Sequence
@@ -34,6 +35,8 @@ from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 SystemId = Literal["icd10se", "kva", "snomed"]
 
@@ -162,17 +165,78 @@ def strip_rich_text(value: str) -> str:
     return _WS_RE.sub(" ", text).strip()
 
 
+def _map_header(header: Sequence[object], path: Path, required: Sequence[str]) -> list[str | None]:
+    """Map a header row to canonical field names, one entry per column.
+
+    Columns with no known alias map to None and are ignored, so an added column
+    in a future release does not break a load. A missing *required* column is a
+    hard error naming what was seen.
+    """
+    fields: list[str | None] = []
+    for cell in header:
+        text = "" if cell is None else str(cell)
+        fields.append(_ALIAS_TO_FIELD.get(fold_header(text)) if text.strip() else None)
+
+    missing = [name for name in required if name not in fields]
+    if missing:
+        seen = [("" if cell is None else str(cell)) for cell in header]
+        raise TerminologyFormatError(
+            f"{path}: missing required column(s) {missing}. "
+            f"Saw headers {seen!r}. Expected an official code-text file "
+            f"(see LICENSING.md)."
+        )
+    return fields
+
+
+def _group_rows(
+    fields: Sequence[str | None],
+    rows: Iterable[tuple[int, Sequence[object]]],
+    path: Path,
+) -> dict[str, list[dict[str, str]]]:
+    """Collect cells into one entry per code, preserving first-seen order.
+
+    A single code spans several rows when it carries several repeated
+    properties, so rows sharing a Kod value are merged rather than treated as
+    separate concepts.
+    """
+    groups: dict[str, list[dict[str, str]]] = {}
+    for line_no, raw_row in rows:
+        if not any(cell is not None and str(cell).strip() for cell in raw_row):
+            continue
+        row: dict[str, str] = {}
+        for field, cell in zip(fields, raw_row, strict=False):
+            if field is None or cell is None:
+                continue
+            value = strip_rich_text(str(cell))
+            if value:
+                row[field] = value
+        code = row.get("code", "").strip()
+        if not code:
+            raise TerminologyFormatError(f"{path}:{line_no}: row has no Kod value")
+        groups.setdefault(code, []).append(row)
+    return groups
+
+
+def read_classification_file(
+    path: Path, *, required: Sequence[str] = ("code", "title")
+) -> Iterator[tuple[str, list[dict[str, str]]]]:
+    """Read an official code-text file, whichever format it is published in.
+
+    The publishers distribute these as tab-separated text and as spreadsheets;
+    which one a given classification offers has changed over time and differs
+    between classifications. Dispatching on the extension means a loader is
+    written once and works with either.
+    """
+    if path.suffix.lower() in {".xlsx", ".xlsm"}:
+        yield from read_classification_xlsx(path, required=required)
+    else:
+        yield from read_classification_tsv(path, required=required)
+
+
 def read_classification_tsv(
     path: Path, *, required: Sequence[str] = ("code", "title")
 ) -> Iterator[tuple[str, list[dict[str, str]]]]:
-    """Yield `(code, rows)` for each code in an official classification TSV.
-
-    Rows are grouped by their Kod value, preserving first-seen order, because a
-    single code spans several rows when it carries several repeated properties.
-    Each row is a mapping of canonical field name -> stripped cell value;
-    columns not in `_HEADER_ALIASES` are ignored, so an added column in a future
-    release does not break the loader.
-    """
+    """Yield `(code, rows)` for each code in an official classification TSV."""
     with path.open("r", encoding="utf-8-sig", newline="") as handle:
         reader = csv.reader(handle, delimiter="\t", quotechar='"')
         try:
@@ -180,32 +244,77 @@ def read_classification_tsv(
         except StopIteration:
             raise TerminologyFormatError(f"{path} is empty; expected a header row") from None
 
-        fields = [_ALIAS_TO_FIELD.get(fold_header(column)) for column in header]
-        missing = [name for name in required if name not in fields]
-        if missing:
-            raise TerminologyFormatError(
-                f"{path}: missing required column(s) {missing}. "
-                f"Saw headers {header!r}. Expected the official tab-separated "
-                f"code-text file (see LICENSING.md)."
-            )
-
-        groups: dict[str, list[dict[str, str]]] = {}
-        for line_no, raw_row in enumerate(reader, start=2):
-            if not any(cell.strip() for cell in raw_row):
-                continue
-            row: dict[str, str] = {}
-            for field, cell in zip(fields, raw_row, strict=False):
-                if field is None:
-                    continue
-                value = strip_rich_text(cell)
-                if value:
-                    row[field] = value
-            code = row.get("code", "").strip()
-            if not code:
-                raise TerminologyFormatError(f"{path}:{line_no}: row has no Kod value")
-            groups.setdefault(code, []).append(row)
+        fields = _map_header(header, path, required)
+        groups = _group_rows(fields, enumerate(reader, start=2), path)
 
     yield from groups.items()
+
+
+# How far into a sheet to look for the header row. The published workbooks put
+# it first, but a title or a validity date above it would be unremarkable.
+MAX_HEADER_SCAN_ROWS = 25
+
+
+def read_classification_xlsx(
+    path: Path, *, required: Sequence[str] = ("code", "title")
+) -> Iterator[tuple[str, list[dict[str, str]]]]:
+    """Yield `(code, rows)` for each code in an official classification workbook.
+
+    The published workbooks carry a human-facing "Läs mig" sheet alongside the
+    data, so the header row is located by search rather than assumed: the first
+    sheet with a row mapping to every required column wins. That also tolerates
+    a title row above the header.
+    """
+    try:
+        import openpyxl
+    except ImportError as exc:  # pragma: no cover - declared dependency
+        raise TerminologyFormatError(
+            "reading .xlsx classification files requires openpyxl"
+        ) from exc
+
+    workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
+    try:
+        seen_headers: list[str] = []
+        for sheet_name in workbook.sheetnames:
+            sheet = workbook[sheet_name]
+            buffered: list[tuple[int, Sequence[object]]] = []
+            fields: list[str | None] | None = None
+
+            for line_no, row in enumerate(sheet.iter_rows(values_only=True), start=1):
+                if fields is None:
+                    if line_no > MAX_HEADER_SCAN_ROWS:
+                        break
+                    try:
+                        fields = _map_header(row, path, required)
+                    except TerminologyFormatError:
+                        continue
+                    seen_headers.append(sheet_name)
+                    continue
+                buffered.append((line_no, row))
+
+            if fields is not None:
+                logger.info(
+                    "classification_workbook_sheet_selected",
+                    extra={"path": str(path), "sheet": sheet_name, "rows": len(buffered)},
+                )
+                if "parent" not in fields:
+                    # Not fatal, but it silently flattens the hierarchy, and a
+                    # flat hierarchy is easy to miss until `chapter` is empty
+                    # everywhere.
+                    logger.warning(
+                        "classification_source_has_no_parent_column",
+                        extra={"path": str(path), "sheet": sheet_name},
+                    )
+                yield from _group_rows(fields, buffered, path).items()
+                return
+
+        raise TerminologyFormatError(
+            f"{path}: no sheet has a header row with the required column(s) "
+            f"{list(required)} within the first {MAX_HEADER_SCAN_ROWS} rows. "
+            f"Sheets examined: {workbook.sheetnames!r}."
+        )
+    finally:
+        workbook.close()
 
 
 def collect_synonyms(

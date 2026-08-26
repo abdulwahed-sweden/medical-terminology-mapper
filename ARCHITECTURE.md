@@ -142,6 +142,24 @@ stages exclude them. Proposing `I10-I15` as a diagnosis code would be a coding
 error. No valid ICD-10-SE or KVÅ code contains a hyphen, which is what makes the
 filter safe.
 
+### One parser, two file formats
+
+The classifications are published as tab-separated text *and* as spreadsheets,
+and which one you can actually download differs between them — as of 2026-08-26
+KVÅ is public only as `.xlsx` and ICD-10-SE only as PDF. `read_classification_file`
+dispatches on the extension into a TSV reader or a workbook reader, both of
+which feed the same header mapper and the same row grouper. The tolerant header
+matching, the multi-row merge, and the synonym rules are therefore shared
+verbatim: there is one parser with two front ends, and a test asserts that both
+formats produce byte-identical concepts from the same data.
+
+The workbook reader searches sheets for the header row rather than assuming it
+is first, because the published KVÅ workbook opens with a `Läs mig` metadata
+sheet. It also warns when the source has no `Överordnad kod` column — which the
+published KVÅ workbook does not — because the result is a silently flat
+hierarchy, and a silently flat hierarchy is easy to miss until `chapter` turns
+out to be empty everywhere.
+
 ### `is_leaf` is derived, not read
 
 The ICD-10-SE file has a `Kodnivå – kodspecifikation` column describing each
@@ -258,7 +276,9 @@ fixed in different places.
    trigrams; it cannot match a paraphrase, which is the whole reason the vector
    stage exists in production. The fake reranker sorts by lexical score.
 3. **Sample data is tiny.** 25 ICD-10-SE codes and 19 KVÅ codes. `chapter` and
-   `is_leaf` are correct within the sample and meaningless outside it.
+   `is_leaf` are correct within the sample and meaningless outside it. The
+   pipeline has separately been run against the real 11 888-code KVÅ release,
+   but the committed fixtures remain samples.
 4. **`model_confidence` is uncalibrated.** It is a self-report, useful for
    ordering and for spotting a flat distribution, not a probability.
 5. **No authentication.** `validator_id` is a free string. Phase 1 has no auth,

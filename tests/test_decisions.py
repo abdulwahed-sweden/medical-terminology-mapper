@@ -88,7 +88,7 @@ def test_correct_requires_a_valid_and_existing_code(
             final_code="nonsense",
             validator_id="c",
         )
-    with pytest.raises(InvalidDecision, match="does not exist in version"):
+    with pytest.raises(InvalidDecision, match="not present in icd10se version"):
         record_decision(
             db_session,
             proposal_id=proposal_id,

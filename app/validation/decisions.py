@@ -145,7 +145,7 @@ def _validate_code(session: Session, proposal: ProposalRow, code: str) -> str:
     ).scalar_one()
     if not exists:
         raise InvalidDecision(
-            f"{code!r} is a well-formed {system} code but does not exist in "
-            f"version {proposal.terminology_version!r} as loaded"
+            f"code {code} is well-formed but not present in "
+            f"{system} version {proposal.terminology_version}"
         )
     return code

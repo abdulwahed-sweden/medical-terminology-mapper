@@ -129,13 +129,22 @@ files yourself; see [LICENSING.md](LICENSING.md) for where they come from, who
 publishes them (responsibility moved from Socialstyrelsen to
 E-hälsomyndigheten on 1 June 2026), and under what terms.
 
-```bash
-# ICD-10-SE — one tab-separated code-text file
-python scripts/load_terminology.py --system icd10se --version 2026 --file ICD10SE_2026.tsv
+Both loaders read **`.xlsx` and `.tsv`**, dispatching on the file extension —
+which format a given classification is published in has changed over time and
+differs between the two.
 
-# KVÅ — two files, one release; pass both in a single command
+```bash
+# KVÅ — published as a single workbook holding both KKÅ and KMÅ
+python scripts/load_terminology.py --system kva --version 2026 \
+    --file kva-inkl-beskrivningstexter-2026.xlsx
+
+# KVÅ from the tab-separated code-text files instead: two files, one release,
+# passed in a single command so they land as one version
 python scripts/load_terminology.py --system kva --version 2026 \
     --file KKA_2026.tsv --file KMA_2026.tsv
+
+# ICD-10-SE — one code-text file, either format
+python scripts/load_terminology.py --system icd10se --version 2026 --file ICD10SE_2026.tsv
 
 # Embeddings, once per (system, version, provider, model)
 python scripts/embed_terminology.py --system icd10se --version 2026 \
@@ -146,10 +155,18 @@ Loading a version **replaces** that whole `(system, version)` slice, so a code
 withdrawn between two loads does not linger. Several versions coexist; every
 proposal records which one it was computed against.
 
-The loaders are written against the publishers' documented file structure —
-UTF-8, tab-separated, header row, quoted cells, one code spanning several rows
-when it carries repeated properties. Headers are matched tolerantly and unknown
-columns ignored, so an added column in a future release will not break a load.
+Headers are matched tolerantly — case, whitespace, dash variants and diacritics
+are folded, and unknown columns are ignored — so an added column in a future
+release will not break a load, and a *missing required* column fails loudly
+naming the headers it saw. For workbooks the header row is located by search,
+so a metadata sheet (the KVÅ workbook opens with `Läs mig`) or a title row above
+the header is handled.
+
+> **The published KVÅ workbook has no `Överordnad kod` column.** Loading KVÅ
+> from it therefore yields no parent links: `chapter` is empty and every concept
+> is a leaf. That is a property of the source, not a parsing bug; the loader
+> logs `classification_source_has_no_parent_column` so it cannot pass unnoticed.
+> The `.tsv` distribution does carry parent links.
 
 ### Using real providers
 
@@ -200,9 +217,10 @@ expected code was retrieved at all, which separates a *retrieval* failure from a
 *ranking* failure — they are fixed in different places.
 
 A twelve-row sample gold set is included so the script runs out of the box. It
-is marked `SAMPLE ONLY`, it scores 100% against the sample fixture, and the
-script prints a loud banner saying so. That is the situation the banners exist
-for.
+is marked `SAMPLE ONLY`: a dozen easy terms against a 25-concept fixture, which
+measures nothing about mapping quality. Running it prints a loud banner to that
+effect — one for the sample gold set, one for each fake provider in use. That
+is exactly the situation the banners exist for.
 
 ---
 
