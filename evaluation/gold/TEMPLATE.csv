@@ -1,0 +1,12 @@
+# Gold-set template for evaluation/run_eval.py
+#
+# One row per free-text term whose correct code you have established from the
+# official coding guidance. Lines beginning with # are ignored.
+#
+#   term           the clinical phrase as a clinician or coder would type it
+#   target_system  icd10se | kva
+#   expected_code  the single correct code, as it appears in the release
+#   source         where the code was verified -- publication, page, or index
+#                  entry. Required: an unsourced gold set measures nothing.
+#   note           anything a later reader needs, e.g. why a near-miss is wrong
+term,target_system,expected_code,source,note

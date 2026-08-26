@@ -1,0 +1,79 @@
+[project]
+name = "medical-terminology-mapper"
+version = "0.1.0"
+description = "Auditable, AI-assisted mapping of free-text clinical terms to Swedish standardized code systems (ICD-10-SE, KVA; SNOMED CT via adapter)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "sqlalchemy>=2.0.30",
+    "psycopg[binary]>=3.1",
+    "alembic>=1.13",
+    "pgvector>=0.3",
+    "jinja2>=3.1",
+    "httpx>=0.27",
+    # The classifications are published as .xlsx as well as .tsv.
+    "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+# Real LLM provider. Not required for the fake-provider pipeline, tests, or the
+# no-API-key quick start.
+anthropic = ["anthropic>=0.40"]
+dev = [
+    "pytest>=8.2",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.setuptools.package-data]
+"app.llm.prompts" = ["*.md"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = [".venv", "app/db/migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "UP", "B", "SIM", "C4", "RUF"]
+ignore = [
+    # Swedish identifiers and terminology strings legitimately contain non-ASCII.
+    "RUF001", "RUF002", "RUF003",
+    # N818 wants every exception name to end in "Error". TerminologyLicenceRequired
+    # is named by the specification, and the domain exceptions read better as the
+    # condition they describe (DecisionConflict, ProposalNotFound). Applying the
+    # rule to some and not others would be worse than not applying it.
+    "N818",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unreachable = true
+plugins = ["pydantic.mypy"]
+exclude = ["^app/db/migrations/", "^\\.venv/"]
+
+[[tool.mypy.overrides]]
+module = ["pgvector.*", "anthropic.*", "openpyxl.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+markers = [
+    "requires_db: test needs a live PostgreSQL with pgvector + pg_trgm",
+    "requires_api_key: test needs a real provider API key and network access",
+]

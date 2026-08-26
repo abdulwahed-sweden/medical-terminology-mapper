@@ -1,0 +1,28 @@
+# SAMPLE ONLY -- NOT A CURATED GOLD SET. DO NOT REPORT FIGURES FROM THIS FILE.
+#
+# Twelve rows, chosen so they resolve within tests/fixtures/icd10se_sample.txt,
+# which exists to make `run_eval.py` runnable end to end out of the box. It is
+# far too small and far too easy to measure anything about mapping quality: the
+# terms are close to the official titles, and the candidate pool is 25 concepts
+# rather than roughly 39 000.
+#
+# The codes and terms themselves are real, transcribed from the official
+# publication cited in each row's `source` (see LICENSING.md for the documents
+# and the date checked). None were invented.
+#
+# A real gold set has to be curated against the official coding guidance,
+# including the hard cases where retrieval and a coder disagree. That is the
+# author's work; this file is the harness for it.
+term,target_system,expected_code,source,note
+högt blodtryck,icd10se,I10,"ICD-10-SE 2026 systematisk förteckning, kap. 9","""Högt blodtryck"" is an Innefattar term under I10, not its preferred term"
+essentiell hypertoni,icd10se,I10,"ICD-10-SE 2026 systematisk förteckning, kap. 9","matches the preferred term directly"
+hypertoni utan känd orsak,icd10se,I10,"ICD-10-SE 2026 systematisk förteckning, kap. 9","paraphrase of the parenthetical in the preferred term"
+hypertensiv hjärtsjukdom med hjärtsvikt,icd10se,I11.0,"ICD-10-SE 2026 systematisk förteckning, kap. 9","must not be confused with I11.9, the same disease without heart failure"
+hypertensiv hjärtsjukdom utan hjärtsvikt,icd10se,I11.9,"ICD-10-SE 2026 systematisk förteckning, kap. 9","the ""utan"" is the whole distinction from I11.0"
+hypertensiv njursjukdom med njursvikt,icd10se,I12.0,"ICD-10-SE 2026 systematisk förteckning, kap. 9",""
+sekundär hypertoni ospecificerad,icd10se,I15.9,"ICD-10-SE 2026 systematisk förteckning, kap. 9","I15 is the category; the unspecified subcategory is the codable one"
+renovaskulär hypertoni,icd10se,I15.0,"ICD-10-SE 2026 systematisk förteckning, kap. 9",""
+akut hjärtinfarkt,icd10se,I21,"ICD-10-SE 2026 systematisk förteckning, kap. 9","the category itself; I21.9 is the unspecified subcategory"
+akut hjärtinfarkt ospecificerad,icd10se,I21.9,"ICD-10-SE 2026 systematisk förteckning, kap. 9",""
+astma ospecificerad,icd10se,J45.9,"ICD-10-SE 2026 systematisk förteckning, kap. 10",""
+diabetes mellitus typ 2,icd10se,E11,"ICD-10-SE 2026 systematisk förteckning, kap. 4",""

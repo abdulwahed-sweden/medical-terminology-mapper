@@ -1,0 +1,52 @@
+# `docker compose up -d` then:
+#   docker compose exec app alembic upgrade head
+#   docker compose exec app python scripts/load_terminology.py \
+#       --system icd10se --version 2026 --file tests/fixtures/icd10se_sample.tsv
+#   docker compose exec app python scripts/embed_terminology.py \
+#       --system icd10se --version 2026 --provider fake
+# ...gives a working validator page on http://localhost:8000 with no API keys.
+
+services:
+  db:
+    # pgvector/pgvector ships PostgreSQL with the `vector` extension already
+    # built; pg_trgm and the `swedish` text search config are in contrib/core.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: mtm
+      POSTGRES_PASSWORD: mtm
+      POSTGRES_DB: mtm
+    ports:
+      # Override DB_PORT if you already run PostgreSQL on 5432.
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mtm -d mtm"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  app:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+psycopg://mtm:mtm@db:5432/mtm
+      # Defaults are the no-network fakes; override to use real providers.
+      EMBEDDING_PROVIDER: ${EMBEDDING_PROVIDER:-fake}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-fake-hash-v1}
+      EMBEDDING_DIM: ${EMBEDDING_DIM:-1536}
+      LLM_PROVIDER: ${LLM_PROVIDER:-fake}
+      LLM_MODEL: ${LLM_MODEL:-fake-rerank-v1}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/srv/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+volumes:
+  db_data:

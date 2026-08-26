@@ -178,4 +178,43 @@ cython_debug/
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
-.cursorindexingignore
+.cursorindexingignore.venv/
+
+# Evaluation run artefacts (per-run misses CSVs)
+evaluation/gold/*_misses_*.csv
+
+# ---------------------------------------------------------------------------
+# Terminology distribution files must never be committed.
+#
+# ICD-10-SE and KVÅ are published by E-hälsomyndigheten under their own terms;
+# this repository ships loaders and small labelled excerpts only. See
+# LICENSING.md. Download the official files anywhere you like -- these rules
+# make sure an accidental `git add -A` cannot publish them.
+*.xlsx
+*.xls
+*.tsv
+data/
+terminology/
+
+# The tracked sample excerpts are explicitly kept (see tests/fixtures/README.md).
+!tests/fixtures/*.txt
+!evaluation/gold/TEMPLATE.csv
+!evaluation/gold/sample_*.csv
+
+# ...but per-run evaluation output is not a sample, even though its name starts
+# with "sample_". The last matching rule wins in .gitignore, so this has to come
+# after the negation above.
+evaluation/gold/*_misses_*.csv
+
+# Local database contents and dumps
+pgdata/
+postgres-data/
+*.sql
+*.dump
+*.bak
+
+# macOS / editor noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
