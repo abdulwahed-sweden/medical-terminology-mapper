@@ -56,8 +56,12 @@ class Settings(BaseSettings):
     vector_top_k: int = 20
     rerank_candidate_cap: int = 15
     trigram_threshold: float = Field(
-        default=0.25,
-        description="Minimum pg_trgm similarity for a concept to enter the lexical candidate set.",
+        default=0.45,
+        description=(
+            "Minimum pg_trgm word_similarity for a concept to enter the lexical "
+            "candidate set. Applies to word_similarity, not similarity, so it is "
+            "on the same scale as PostgreSQL's own 0.6 default for that operator."
+        ),
     )
     rrf_k: int = Field(default=60, description="Reciprocal-rank-fusion smoothing constant.")
 

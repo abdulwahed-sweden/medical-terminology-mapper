@@ -78,3 +78,37 @@ def db_session(connection: Connection) -> Iterator[Session]:
         yield session
     finally:
         session.close()
+
+
+# --------------------------------------------------------------------------- #
+# Terminology fixtures
+# --------------------------------------------------------------------------- #
+
+SAMPLE_VERSION = "2026-sample"
+
+
+@pytest.fixture
+def icd10se_loaded(db_session: Session) -> str:
+    """Load the ICD-10-SE sample into the test transaction; return its version."""
+    from app.db.models import upsert_concepts
+    from app.terminology.icd10se import ICD10SE
+
+    upsert_concepts(
+        db_session, ICD10SE().load(FIXTURES / "icd10se_sample.txt", SAMPLE_VERSION)
+    )
+    return SAMPLE_VERSION
+
+
+@pytest.fixture
+def kva_loaded(db_session: Session) -> str:
+    from app.db.models import upsert_concepts
+    from app.terminology.kva import KVA
+
+    loader = KVA()
+    concepts = [
+        concept
+        for name in ("kva_kka_sample.txt", "kva_kma_sample.txt")
+        for concept in loader.load(FIXTURES / name, SAMPLE_VERSION)
+    ]
+    upsert_concepts(db_session, concepts)
+    return SAMPLE_VERSION

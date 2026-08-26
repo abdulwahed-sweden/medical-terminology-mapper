@@ -8,13 +8,26 @@ live in `app.audit.models`.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import Boolean, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    delete,
+    func,
+    select,
+)
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column
 
 from app.config import get_settings
 from app.db.base import Base
+from app.terminology.base import Concept, build_search_text
 
 
 class ConceptRow(Base):
@@ -73,3 +86,63 @@ class ConceptEmbeddingRow(Base):
     embedding: Mapped[list[float]] = mapped_column(
         Vector(get_settings().embedding_dim), nullable=False
     )
+
+
+def upsert_concepts(session: Session, concepts: Iterable[Concept]) -> int:
+    """Write concepts for one `(system, version)`, replacing what is there.
+
+    A terminology release is a unit: loading version 2026 twice must leave the
+    same rows, and a code withdrawn between two loads of the same version must
+    not linger. So the target `(system, version)` slice is deleted and rewritten
+    rather than merged. `concepts` is *not* an audit table, so this is allowed
+    -- the append-only guarantee covers proposals and decisions.
+    """
+    materialised = list(concepts)
+    if not materialised:
+        return 0
+
+    systems = {c.system for c in materialised}
+    versions = {c.version for c in materialised}
+    if len(systems) != 1 or len(versions) != 1:
+        raise ValueError(
+            f"upsert_concepts handles one (system, version) at a time; "
+            f"got systems={sorted(systems)} versions={sorted(versions)}"
+        )
+    system, version = systems.pop(), versions.pop()
+
+    session.execute(
+        delete(ConceptRow).where(ConceptRow.system == system, ConceptRow.version == version)
+    )
+    session.execute(
+        delete(ConceptEmbeddingRow).where(
+            ConceptEmbeddingRow.system == system, ConceptEmbeddingRow.version == version
+        )
+    )
+    session.add_all(
+        [
+            ConceptRow(
+                system=c.system,
+                version=c.version,
+                code=c.code,
+                preferred_term=c.preferred_term,
+                synonyms=c.synonyms,
+                parent_code=c.parent_code,
+                is_leaf=c.is_leaf,
+                chapter=c.chapter,
+                search_text=build_search_text(c),
+            )
+            for c in materialised
+        ]
+    )
+    session.flush()
+    return len(materialised)
+
+
+def loaded_versions(session: Session) -> list[tuple[str, str, int]]:
+    """`(system, version, concept_count)` for everything currently loaded."""
+    rows = session.execute(
+        select(ConceptRow.system, ConceptRow.version, func.count())
+        .group_by(ConceptRow.system, ConceptRow.version)
+        .order_by(ConceptRow.system, ConceptRow.version)
+    ).all()
+    return [(system, version, count) for system, version, count in rows]
