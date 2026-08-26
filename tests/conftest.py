@@ -154,3 +154,33 @@ def icd10se_embedded(
     )
     db_session.flush()
     return icd10se_loaded
+
+
+# --------------------------------------------------------------------------- #
+# HTTP client
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture
+def client(db_session: Session) -> Iterator["TestClient"]:  # noqa: F821
+    """A TestClient bound to the test transaction.
+
+    The dependency override matters: without it the app would open its own
+    session on a different connection and see none of the fixture data, and
+    nothing it wrote would be rolled back at teardown.
+    """
+    from fastapi.testclient import TestClient
+
+    from app.db.session import get_session
+    from app.main import create_app
+
+    def _session_override() -> Iterator[Session]:
+        # Must be a generator *function*: FastAPI decides how to handle a
+        # dependency by inspecting the callable, not its return value.
+        yield db_session
+
+    app = create_app()
+    app.dependency_overrides[get_session] = _session_override
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()

@@ -62,9 +62,23 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False, default=str)
 
 
+_OURS = "_mtm_json_handler"
+
+
 def configure_logging(level: str = "INFO") -> None:
+    """Install the JSON handler on the root logger, idempotently.
+
+    Only handlers this function installed are removed. Wiping every root
+    handler would be rude to whatever else configured logging first -- a host
+    application, or pytest's log capture -- and the resulting "the logs are
+    gone" is an unpleasant thing to debug.
+    """
+    root = logging.getLogger()
+    for existing in [h for h in root.handlers if getattr(h, _OURS, False)]:
+        root.removeHandler(existing)
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
-    root = logging.getLogger()
-    root.handlers[:] = [handler]
+    setattr(handler, _OURS, True)
+    root.addHandler(handler)
     root.setLevel(level.upper())

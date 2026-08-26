@@ -12,7 +12,11 @@ from app.db.base import Base
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers defaults to True, which would switch off every
+    # logger already created -- including the application's own, whenever a
+    # migration is run in-process. Silently losing application logging is a
+    # nasty thing to debug, so opt out explicitly.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 target_metadata = Base.metadata
