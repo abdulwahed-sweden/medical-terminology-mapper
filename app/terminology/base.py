@@ -72,6 +72,12 @@ class Concept(BaseModel):
     # never be presented as publisher-supplied.
     parent_source: ParentSource | None = None
 
+    # ICD-10-SE marks some codes as unusable for a primary diagnosis --
+    # manifestation (asterisk) codes above all, which the publication says
+    # "ska alltid dubbelklassificeras med en etiologisk kod". Proposing one as
+    # a primary diagnosis is a coding error the file itself warns about.
+    not_primary_diagnosis: bool = False
+
     # False for chapter, section and group headings. They are loaded because
     # the hierarchy needs them, and excluded from retrieval and from decisions
     # because they name a group, not a codable concept.

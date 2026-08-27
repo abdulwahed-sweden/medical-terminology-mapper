@@ -297,3 +297,17 @@ def test_contrast_meets_wcag_aa(fg: str, bg: str, minimum: float) -> None:
     tokens = _tokens()
     ratio = _contrast(tokens[fg], tokens[bg])
     assert ratio >= minimum, f"{fg} on {bg} is {ratio:.2f}:1, needs {minimum}:1"
+
+
+def test_not_primary_badge_and_legend_are_present(markup: str) -> None:
+    """The flag must be visible on the page and explained once."""
+    assert 'id="s-notprimary"' in markup
+    assert "Ej huvuddiagnos" in markup
+    assert "bidiagnos" in markup  # the legend says the code may still be right
+    assert ".tag--notprimary" in CSS.read_text(encoding="utf-8")
+
+
+def test_hierarchy_breadcrumb_is_present(markup: str) -> None:
+    assert 'id="s-hierarchy"' in markup
+    assert "crumbs" in CSS.read_text(encoding="utf-8")
+    assert "härledd" in JS.read_text(encoding="utf-8")

@@ -133,6 +133,12 @@ function renderSuggestion(p) {
   const top = (p.ranked || [])[0];
   $("s-reason").textContent = top ? top.reason : "";
   renderHierarchy(p);
+  const notPrimary = p.suggested_not_primary_diagnosis;
+  $("s-notprimary").innerHTML = notPrimary
+    ? '<span class="tag tag--notprimary">Ej huvuddiagnos</span> ' +
+      "Kodverket anger att koden inte får användas som huvuddiagnos."
+    : "";
+  show($("s-notprimary"), Boolean(notPrimary));
 
   if (p.provider_kind === "fake") {
     $("s-confidence").innerHTML =
@@ -226,6 +232,8 @@ function renderEvidence(p) {
         ? '<span class="tag tag--lex">Lexikal</span>'
         : '<span class="tag">Vektor</span>').join("");
     const bestPill = isBest ? '<span class="tag tag--best">Bästa träff</span>' : "";
+    const notPrimaryTag = c.not_primary_diagnosis
+      ? '<span class="tag tag--notprimary">Ej huvuddiagnos</span>' : "";
     const reason = reasonBy.get(c.code);
     const conf = isFake ? "" : `<td class="num">${num(confBy.get(c.code), 2)}</td>`;
     const modelRank = rankBy.has(c.code) ? `#${rankBy.get(c.code)}` : "—";
@@ -234,7 +242,7 @@ function renderEvidence(p) {
       `<td><span class="rank">${index + 1}</span></td>` +
       `<td class="cell-code">${esc(c.code)}</td>` +
       `<td><span class="cell-term">${esc(c.preferred_term)}</span>` +
-        `<span class="cell-sub">${bestPill}${badges}` +
+        `<span class="cell-sub">${bestPill}${notPrimaryTag}${badges}` +
         (reason ? `<span class="cell-reason">${esc(reason)}</span>` : "") +
         `</span></td>` +
       `<td><span class="tag tag--field">${esc(FIELD_LABEL[c.matched_field] || "—")}</span></td>` +

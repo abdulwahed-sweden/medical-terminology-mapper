@@ -79,6 +79,13 @@ class ICD10SE:
                     # ("I10-I15") or a manifestation marker; they name a group,
                     # not a codable concept.
                     assignable=self.validate_code_format(code),
+                    # From the "Ej huvuddiagnos" column, whose documented
+                    # content is a sentence such as "Ska inte anvandas som
+                    # huvuddiagnos". Any non-empty value means the code is not
+                    # to be used as a primary diagnosis.
+                    not_primary_diagnosis=any(
+                        row.get("not_primary") for row in rows
+                    ),
                 )
             )
         headings = sum(1 for concept in concepts if not concept.assignable)

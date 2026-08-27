@@ -43,7 +43,7 @@ def test_loader_satisfies_the_protocol() -> None:
 
 def test_every_code_is_loaded_once(icd10se_concepts: dict[str, Concept]) -> None:
     concepts = list(ICD10SE().load(ICD10SE_SAMPLE, "2026-sample"))
-    assert len(concepts) == len(icd10se_concepts) == 25
+    assert len(concepts) == len(icd10se_concepts) == 27
 
 
 def test_multi_row_code_is_merged_into_one_concept(
@@ -311,7 +311,7 @@ def test_icd10se_xlsx_and_tsv_agree(tmp_path: Path) -> None:
     from_tsv = list(ICD10SE().load(ICD10SE_SAMPLE, "2026-sample"))
     from_xlsx = list(ICD10SE().load(workbook, "2026-sample"))
 
-    assert len(from_xlsx) == 25
+    assert len(from_xlsx) == 27
     assert [c.model_dump() for c in from_xlsx] == [c.model_dump() for c in from_tsv]
 
 

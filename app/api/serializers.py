@@ -56,6 +56,10 @@ def serialize_proposal(session: Session, proposal: ProposalRow) -> ProposalOut:
 
     hierarchy: list[HierarchyNode] = []
     parent_source: str | None = None
+    not_primary = any(
+        c.get("not_primary_diagnosis") and c.get("code") == proposal.suggested_code
+        for c in proposal.candidates
+    )
     if proposal.suggested_code:
         hierarchy = [
             HierarchyNode(code=node["code"], title=node["title"])
@@ -106,6 +110,7 @@ def serialize_proposal(session: Session, proposal: ProposalRow) -> ProposalOut:
         suggested_code=proposal.suggested_code,
         suggested_term=terms.get(proposal.suggested_code or ""),
         suggested_hierarchy=hierarchy,
+        suggested_not_primary_diagnosis=not_primary,
         suggested_parent_source=parent_source,
         model_confidence=None if is_fake else proposal.model_confidence,
         no_good_match=proposal.status == "no_good_match",

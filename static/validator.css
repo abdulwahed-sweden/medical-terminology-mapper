@@ -320,6 +320,10 @@ body {
 .tag--best { background: var(--teal); color: var(--surface); }
 .tag--lex  { background: var(--blue-tint); color: var(--blue); }
 .tag--test { background: var(--amber-bg); color: var(--amber-text); border: 1px solid var(--amber-line); }
+.tag--notprimary {
+  background: var(--amber-bg); color: var(--amber-text);
+  border: 1px solid var(--amber-line);
+}
 .tag--field { background: var(--teal-chip); color: var(--teal); }
 
 /* --------------------------------------------------------- confirm panel */

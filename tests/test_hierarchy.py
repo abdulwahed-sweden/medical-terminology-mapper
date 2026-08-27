@@ -207,3 +207,96 @@ def test_hierarchy_chain_is_resolved_with_titles_where_known(
     icd_chain = hierarchy_for(db_session, system="icd10se", version=icd10se_loaded, code="I11.0")
     assert [n["code"] for n in icd_chain] == ["I00-I99", "I10-I15", "I11"]
     assert all(n["title"] for n in icd_chain)
+
+
+# --------------------------------------------------- Ej huvuddiagnos flag
+
+
+def test_loader_reads_the_ej_huvuddiagnos_column() -> None:
+    """I32 is a manifestation (asterisk) code. The publication states an
+    asterisk code "ska alltid dubbelklassificeras med en etiologisk kod", so it
+    cannot stand alone as a primary diagnosis."""
+    by_code = {c.code: c for c in ICD10SE().load(FIXTURES / "icd10se_sample.txt", "v")}
+    assert by_code["I32"].not_primary_diagnosis is True
+    assert by_code["I32"].assignable is True  # it is codable, just not primary
+    assert by_code["I10"].not_primary_diagnosis is False
+
+
+def test_kva_has_no_such_marker() -> None:
+    """KVÅ is a procedure classification; the column does not exist there."""
+    concepts = list(KVA().load(FIXTURES / "kva_kma_sample.txt", "v"))
+    assert all(c.not_primary_diagnosis is False for c in concepts)
+
+
+@pytest.mark.requires_db
+def test_the_flag_reaches_retrieval(db_session: Session, icd10se_loaded: str) -> None:
+    results = lexical_search(
+        db_session,
+        query=normalize("perikardit").normalized,
+        system="icd10se",
+        version=icd10se_loaded,
+        top_k=10,
+        trigram_threshold=SETTINGS.trigram_threshold,
+    )
+    hit = next(c for c in results if c.code == "I32")
+    assert hit.not_primary_diagnosis is True
+
+
+def test_the_flag_is_shown_to_the_reranker() -> None:
+    """Surfaced without revising rerank_v1.md -- the prompt already tells the
+    model the candidates carry fields."""
+    import json
+
+    from app.llm.base import build_rerank_input
+    from app.models.candidate import Candidate
+
+    payload = json.loads(
+        build_rerank_input(
+            "perikardit",
+            [
+                Candidate(
+                    system="icd10se",
+                    version="v",
+                    code="I32",
+                    preferred_term="Perikardit vid sjukdomar som klassificeras på annan plats",
+                    not_primary_diagnosis=True,
+                )
+            ],
+            target_system="icd10se",
+            terminology_version="v",
+        )
+    )
+    assert payload["candidates"][0]["not_primary_diagnosis"] is True
+
+
+@pytest.mark.requires_db
+def test_a_not_primary_code_can_still_be_accepted(
+    db_session: Session, icd10se_embedded: str
+) -> None:
+    """The validator may legitimately be coding a secondary diagnosis, so the
+    flag informs and never blocks."""
+    from app.embeddings.fake import FakeEmbeddingProvider as FEP
+    from app.llm.base import load_prompt
+    from app.llm.fake import FakeLLMProvider
+    from app.pipeline.map_term import map_term
+    from app.validation.decisions import record_decision
+
+    outcome = map_term(
+        db_session,
+        text="perikardit",
+        target_system="icd10se",
+        version=icd10se_embedded,
+        trace_id="t",
+        settings=SETTINGS,
+        embedding_provider=FEP(dim=SETTINGS.embedding_dim),
+        llm_provider=FakeLLMProvider(),
+        prompt=load_prompt(),
+    )
+    assert outcome.proposal.suggested_code == "I32"
+    row = record_decision(
+        db_session,
+        proposal_id=outcome.proposal.id,
+        decision="accept",
+        validator_id="coder",
+    )
+    assert row.final_code == "I32"

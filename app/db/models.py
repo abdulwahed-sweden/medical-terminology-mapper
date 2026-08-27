@@ -56,6 +56,8 @@ class ConceptRow(Base):
     # Headings (chapter/section/group rows) are loaded for the hierarchy and
     # excluded from retrieval and decisions.
     assignable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # The publisher's "Ej huvuddiagnos" marker.
+    not_primary_diagnosis: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Denormalised "preferred term + synonyms", the target for trigram
     # similarity. Kept as a plain column so the loader controls exactly what is
@@ -144,6 +146,7 @@ def upsert_concepts(session: Session, concepts: Iterable[Concept]) -> int:
                 chapter=c.chapter,
                 parent_source=c.parent_source,
                 assignable=c.assignable,
+                not_primary_diagnosis=c.not_primary_diagnosis,
                 search_text=build_search_text(c),
                 synonym_text=build_synonym_text(c),
                 description_text=c.description,

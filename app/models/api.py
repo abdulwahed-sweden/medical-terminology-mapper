@@ -103,6 +103,7 @@ class ProposalOut(BaseModel):
     suggested_code: str | None
     suggested_term: str | None
     suggested_hierarchy: list[HierarchyNode] = Field(default_factory=list)
+    suggested_not_primary_diagnosis: bool = False
     suggested_parent_source: Literal["column", "derived"] | None = None
     model_confidence: float | None
     no_good_match: bool

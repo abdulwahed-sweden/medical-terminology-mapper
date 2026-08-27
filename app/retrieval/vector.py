@@ -25,6 +25,7 @@ _SQL = sa.text(
         c.synonyms,
         c.chapter,
         c.is_leaf,
+        c.not_primary_diagnosis,
         -- pgvector's <=> is cosine *distance* in [0, 2]. Report similarity so
         -- larger is better, matching every other score in the pipeline.
         1 - (e.embedding <=> CAST(:query_vector AS vector)) AS cosine_similarity
@@ -78,6 +79,7 @@ def vector_search(
             synonyms=list(row.synonyms or []),
             chapter=row.chapter,
             is_leaf=row.is_leaf,
+            not_primary_diagnosis=row.not_primary_diagnosis,
             sources=["vector"],
             vector_score=float(row.cosine_similarity),
             vector_rank=rank,
