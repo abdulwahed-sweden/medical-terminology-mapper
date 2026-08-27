@@ -58,6 +58,17 @@ logger = logging.getLogger(__name__)
 
 SERVER_NAME = "terminology-mcp"
 
+
+def server_version() -> str:
+    """The distribution version, so a client can report what it is talking to."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("medical-terminology-mapper")
+    except PackageNotFoundError:  # pragma: no cover - source checkout without install
+        return "0.0.0+unknown"
+
+
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 50
 
@@ -118,6 +129,7 @@ def _guarded(fn: Callable[[Session, Settings], dict[str, Any]]) -> dict[str, Any
 def build_server() -> MCPServer:
     server = MCPServer(
         name=SERVER_NAME,
+        version=server_version(),
         instructions=(
             "Swedish clinical terminology (ICD-10-SE diagnoses, KVÅ procedures). "
             "You can look codes up and file a mapping proposal for a human to "
