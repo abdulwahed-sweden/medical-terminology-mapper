@@ -362,6 +362,43 @@ every way of recording an incoherent one is closed:
 - A second decision is refused, with a unique constraint as the last line of
   defence against a race.
 
+### MCP is read-and-propose; there is no decision tool
+
+The MCP server can search the terminologies and file a proposal. It cannot
+accept, reject or correct one, and that is a decision rather than an omission.
+
+The product's central rule is that a mapping becomes valid only when a human
+records a decision, and that the decision row is evidence of who concluded
+what. An MCP client is by construction a model. A tool that let it accept a
+code would let a model decide, and the audit trail would then carry a
+human-shaped row with no human behind it — worse than no trail at all, because
+it looks like one.
+
+The same reasoning excludes loading and embedding tools: those are operator
+actions with licensing consequences, not something an agent does mid-
+conversation. And no tool takes free-form SQL.
+
+An agent that wants a code validated files a proposal and tells its human to
+open the validator page. `get_proposal_status` lets it watch for the verdict —
+and only watch.
+
+### MCP runs in-process, not over HTTP
+
+The server imports the same settings, session factory, providers and pipeline
+functions as the FastAPI app. It does not call the HTTP API.
+
+Calling the API would have been quicker to write and would have given two
+implementations of the same behaviour, drifting apart at their own pace, plus a
+second network hop and a second place for an error to be translated. Instead,
+anything both surfaces need lives in `app/services/terminology.py` below both
+of them, and each surface is a thin wrapper. `inspect_code` is the clearest
+case: the page, the API and the MCP server reach the same verdict about a code
+and quote the same Swedish sentence, because there is one function.
+
+The cost is that the MCP process needs database access and the application's
+settings, exactly as the web app does. That is the right trade for a local
+stdio server.
+
 ### Writes commit before the response is built
 
 FastAPI runs a `yield` dependency's teardown *after* the response has gone out.
