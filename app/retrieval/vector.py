@@ -37,6 +37,7 @@ _SQL = sa.text(
       AND e.provider = :provider
       AND e.model = :model
       AND c.assignable
+      AND NOT c.placeholder
     ORDER BY e.embedding <=> CAST(:query_vector AS vector)
     LIMIT :limit
     """

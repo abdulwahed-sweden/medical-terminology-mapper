@@ -56,6 +56,8 @@ class ConceptRow(Base):
     # Headings (chapter/section/group rows) are loaded for the hierarchy and
     # excluded from retrieval and decisions.
     assignable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # A reserved U-code slot: real, but standing for nothing yet.
+    placeholder: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # The publisher's "Ej huvuddiagnos" marker.
     not_primary_diagnosis: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
@@ -147,6 +149,7 @@ def upsert_concepts(session: Session, concepts: Iterable[Concept]) -> int:
                 parent_source=c.parent_source,
                 assignable=c.assignable,
                 not_primary_diagnosis=c.not_primary_diagnosis,
+                placeholder=c.placeholder,
                 search_text=build_search_text(c),
                 synonym_text=build_synonym_text(c),
                 description_text=c.description,

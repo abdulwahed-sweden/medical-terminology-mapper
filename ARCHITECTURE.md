@@ -362,6 +362,33 @@ every way of recording an incoherent one is closed:
 - A second decision is refused, with a unique constraint as the last line of
   defence against a race.
 
+### The version string is the publisher's release year
+
+`"2026"`, as an opaque string. Not a date, not a semantic version, not the
+validity date the files also carry (`2026-01-01`). The publisher names a release
+by its year and ships one a year, so the year is the shortest thing that
+identifies it unambiguously. It is opaque: nothing parses, compares or orders
+it, so a publisher who changes the convention breaks nothing here.
+
+Sample fixtures use `"2026-sample"` so a sample can never be mistaken for the
+release in a stored proposal.
+
+### U-codes are placeholders, and are not loaded by default
+
+The publisher distributes 63 U-codes in a separate file: reserved slots that let
+a new code be put into use at short notice, as happened with covid-19. They are
+real, well-formed codes -- not headings -- but until one is put into use it
+stands for nothing.
+
+So `scripts/load_terminology.py` excludes them unless `--include-u-codes` is
+passed, and when loaded they are stored with `placeholder = true` and excluded
+from retrieval exactly as headings are. They differ from headings in what
+happens next: a heading is refused as a decision outright, because a group is
+never a mapping, whereas a human may deliberately record a U-code. The first
+attempt is therefore refused with an explanation, and a repeat carrying
+`acknowledge_placeholder` succeeds -- a warning with a confirmation, not a
+prohibition.
+
 ### Versions are first-class
 
 Every concept row is keyed by `(system, version, code)`; several versions

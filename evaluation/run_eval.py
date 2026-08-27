@@ -11,7 +11,9 @@ script is what makes that curation immediately useful the day it exists.
 
 Every evaluated row creates a real proposal in the audit trail, because it is a
 real mapping attempt. Rows from one run share a trace_id prefix (`eval-<run>-`)
-so they can be told apart from clinical use afterwards.
+so they can be told apart from clinical use afterwards. `--dry-run` computes the
+same metrics without writing them, for gold sets large enough that one audit row
+per term is noise rather than history.
 """
 
 from __future__ import annotations
@@ -72,6 +74,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default=None, help="Overrides LLM_MODEL.")
     parser.add_argument("--embedding-provider", default=None, help="Overrides EMBEDDING_PROVIDER.")
     parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help=(
+            "Compute the metrics without writing proposals. Useful for a large "
+            "gold set, where one audit row per term is noise rather than "
+            "history. The default records them, because an evaluated row is a "
+            "real mapping attempt."
+        ),
+    )
+    parser.add_argument(
         "--misses",
         type=Path,
         default=None,
@@ -122,6 +134,8 @@ def main(argv: list[str] | None = None) -> int:
     prompt = load_prompt("rerank_v1")
     run_id = uuid.uuid4().hex[:8]
 
+    if args.dry_run:
+        print("dry run: metrics only, no proposals will be written\n")
     print(
         f"gold={args.gold}  system={args.system}  version={args.version}\n"
         f"llm={llm.provider_id}/{llm.model_id}  "
@@ -150,6 +164,10 @@ def main(argv: list[str] | None = None) -> int:
             )
             proposal = outcome.proposal
             ranked = [entry["code"] for entry in (proposal.rerank or {}).get("ranked", [])]
+            if args.dry_run:
+                # Roll the proposal back: the metrics are computed from the
+                # same objects either way, only the audit row is discarded.
+                session.rollback()
             results.append(
                 RowResult(
                     term=term,

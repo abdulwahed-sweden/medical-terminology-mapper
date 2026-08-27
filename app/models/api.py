@@ -131,6 +131,14 @@ class DecisionRequest(BaseModel):
     final_code: str | None = Field(default=None, max_length=32)
     validator_note: str | None = Field(default=None, max_length=500)
     validator_id: str = Field(min_length=1, max_length=128)
+    acknowledge_placeholder: bool = Field(
+        default=False,
+        description=(
+            "Confirms the validator means to record a reserved U-code "
+            "placeholder. Without it such a code is refused with an "
+            "explanation rather than silently accepted."
+        ),
+    )
 
 
 class ErrorOut(BaseModel):

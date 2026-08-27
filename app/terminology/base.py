@@ -78,6 +78,11 @@ class Concept(BaseModel):
     # a primary diagnosis is a coding error the file itself warns about.
     not_primary_diagnosis: bool = False
 
+    # U-codes: reserved slots the publisher ships so a new code can be put
+    # into use at short notice. They are real codes, not headings, but they
+    # stand for nothing yet, so they are never proposed.
+    placeholder: bool = False
+
     # False for chapter, section and group headings. They are loaded because
     # the hierarchy needs them, and excluded from retrieval and from decisions
     # because they name a group, not a codable concept.

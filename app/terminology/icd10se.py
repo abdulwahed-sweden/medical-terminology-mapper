@@ -44,10 +44,20 @@ ICD10SE_CODE_RE = re.compile(r"^[A-Z][0-9]{2}(\.[A-Z0-9]{1,2})?$")
 _SYNONYM_FIELDS = ("latin", "includes", "example")
 
 
+# The publisher distributes 63 U-codes in a separate file: reserved slots that
+# let a new code be put into use at short notice, as happened with covid-19.
+# They are excluded by default -- proposing a code that stands for nothing yet
+# would be wrong -- and loaded into the same (system, version) when asked for.
+U_CODE_RE = re.compile(r"^U[0-9]{2}")
+
+
 class ICD10SE:
     """Loader for the official ICD-10-SE code-text file (16-column TSV)."""
 
     system_id = "icd10se"
+
+    def __init__(self, *, include_u_codes: bool = False) -> None:
+        self.include_u_codes = include_u_codes
 
     def load(self, path: Path, version: str) -> Iterable[Concept]:
         concepts: list[Concept] = []
@@ -56,6 +66,9 @@ class ICD10SE:
             if title is None:
                 # A code with no Titel carries no name to map to; skipping is
                 # better than inventing one.
+                continue
+            is_u_code = bool(U_CODE_RE.match(code))
+            if is_u_code and not self.include_u_codes:
                 continue
             parent = next((row["parent"] for row in rows if row.get("parent")), None)
             # Beskrivning is prose, not a name: carried separately so it can be
@@ -79,6 +92,7 @@ class ICD10SE:
                     # ("I10-I15") or a manifestation marker; they name a group,
                     # not a codable concept.
                     assignable=self.validate_code_format(code),
+                    placeholder=is_u_code,
                     # From the "Ej huvuddiagnos" column, whose documented
                     # content is a sentence such as "Ska inte anvandas som
                     # huvuddiagnos". Any non-empty value means the code is not

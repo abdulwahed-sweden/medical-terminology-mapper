@@ -76,6 +76,7 @@ _SQL = """
       -- Headings name a group, not a codable concept. Filtered here rather
       -- than after the fact, so they never consume a top-K slot.
       AND c.assignable
+      AND NOT c.placeholder
       AND (
             ({match_condition})
             -- `<<%` honours pg_trgm.strict_word_similarity_threshold, set below.

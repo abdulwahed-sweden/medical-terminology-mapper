@@ -31,11 +31,16 @@ from app.terminology.icd10se import ICD10SE
 from app.terminology.kva import KVA
 from app.terminology.snomed import SnomedCT
 
-LOADERS: dict[str, TerminologySystem] = {
-    "icd10se": ICD10SE(),
-    "kva": KVA(),
-    "snomed": SnomedCT(),
-}
+
+def _loaders(*, include_u_codes: bool) -> dict[str, TerminologySystem]:
+    return {
+        "icd10se": ICD10SE(include_u_codes=include_u_codes),
+        "kva": KVA(),
+        "snomed": SnomedCT(),
+    }
+
+
+LOADERS: dict[str, TerminologySystem] = _loaders(include_u_codes=False)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -50,12 +55,21 @@ def main(argv: list[str] | None = None) -> int:
         dest="files",
         help="Official code-text file. Repeat for KVÅ's two files (KKÅ and KMÅ).",
     )
+    parser.add_argument(
+        "--include-u-codes",
+        action="store_true",
+        help=(
+            "Load ICD-10-SE U-codes into the same (system, version). They are "
+            "reserved slots that stand for nothing yet, so they are stored as "
+            "placeholders and never proposed."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = get_settings()
     configure_logging(settings.log_level)
 
-    loader = LOADERS[args.system]
+    loader = _loaders(include_u_codes=args.include_u_codes)[args.system]
     concepts: list[Concept] = []
     for path in args.files:
         if not path.exists():
