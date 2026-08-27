@@ -449,15 +449,28 @@ fixed in different places.
    mapping, no combination rules (dagger/asterisk pairs, mandatory additional
    codes). The classification files carry that information; Phase 1 does not
    act on it.
-9. **The gate's fuzzy threshold rests on thin evidence.** 29 negatives and 30
+9. **Retrieval index usage is not asserted at release size.** An earlier
+   measurement recorded the trigram predicate running as a sequential scan
+   (145 ms over 11 888 concepts). It no longer reproduces: the full query now
+   plans as a `BitmapOr` across the trigram and tsvector indexes, and
+   end-to-end retrieval on the real KVÅ release measures 10–19 ms rather than
+   the 199–267 ms recorded before. Several things changed in between — bulk
+   loads now `ANALYZE`, the non-indexable `code NOT LIKE '%-%'` filter became
+   an indexed boolean, and two indexes were added — and a controlled test
+   showed the plan stays index-served even with statistics on `search_text`
+   disabled, so no single cause is established. Two tests assert the *form*
+   of both predicates stays index-servable, which is what would silently
+   regress; nothing asserts the planner's choice at release size, because the
+   committed fixtures are 27 and 19 concepts.
+10. **The gate's fuzzy threshold rests on thin evidence.** 29 negatives and 30
    misspellings on one terminology, with the nearest negative 0.029 below the
    threshold, and the two classes overlapping on that signal alone. It is
    versioned and recorded per proposal so it can be re-measured; it should be,
    against ICD-10-SE and against real mistyped input.
-10. **The gate cannot judge relevance**, only whether evidence exists. Common
+11. **The gate cannot judge relevance**, only whether evidence exists. Common
     Swedish words that occur in the terminology pass it. That is the reranker's
     job, and with the stand-in there is no reranker worth the name.
-11. **No automated browser tests.** Playwright ships no Chromium for the
+12. **No automated browser tests.** Playwright ships no Chromium for the
     development machine's OS. Page structure, semantics and contrast are tested
     server-side; interaction is a manual checklist
     (`docs/MANUAL_UI_TEST.md`).
