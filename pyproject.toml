@@ -19,7 +19,12 @@ dependencies = [
     "httpx>=0.27",
     # The classifications are published as .xlsx as well as .tsv.
     "openpyxl>=3.1",
+    # MCP server (Phase 2). 2.x renamed FastMCP to MCPServer; tested on 2.1.1.
+    "mcp>=2.1,<3",
 ]
+
+[project.scripts]
+terminology-mcp = "mcp_server.__main__:main"
 
 [project.optional-dependencies]
 # Real LLM provider. Not required for the fake-provider pipeline, tests, or the
@@ -37,7 +42,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["app*", "mcp_server*", "evaluation*"]
 
 [tool.setuptools.package-data]
 "app.llm.prompts" = ["*.md"]

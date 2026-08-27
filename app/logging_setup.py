@@ -14,6 +14,7 @@ import sys
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import TextIO
 from typing import Any
 
 _trace_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("trace_id", default=None)
@@ -65,7 +66,7 @@ class JsonFormatter(logging.Formatter):
 _OURS = "_mtm_json_handler"
 
 
-def configure_logging(level: str = "INFO") -> None:
+def configure_logging(level: str = "INFO", stream: TextIO | None = None) -> None:
     """Install the JSON handler on the root logger, idempotently.
 
     Only handlers this function installed are removed. Wiping every root
@@ -77,7 +78,9 @@ def configure_logging(level: str = "INFO") -> None:
     for existing in [h for h in root.handlers if getattr(h, _OURS, False)]:
         root.removeHandler(existing)
 
-    handler = logging.StreamHandler(sys.stdout)
+    # stdout by default, but an MCP stdio server must send logs to stderr:
+    # stdout is the protocol wire there, and one stray line corrupts it.
+    handler = logging.StreamHandler(stream if stream is not None else sys.stdout)
     handler.setFormatter(JsonFormatter())
     setattr(handler, _OURS, True)
     root.addHandler(handler)
