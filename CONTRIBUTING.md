@@ -34,6 +34,20 @@ docker compose up -d db
 export DATABASE_URL=postgresql+psycopg://mtm:mtm@localhost:5432/mtm
 ```
 
+`pytest` never contacts an AI provider. The harness pins both providers to the
+deterministic fakes before any test module is imported, ignores the application
+API keys, and blocks outbound connections to anything but the database and
+localhost — so real credentials in your shell or `.env` are safe and cost
+nothing. The live provider tests are opt-in twice over: they read dedicated
+`TEST_*` credentials, never the application ones, and they need the flag.
+
+```bash
+pytest --live-providers -m requires_api_key   # deliberate, and costs money
+```
+
+See the test-safety section of [`.env.example`](.env.example); the guarantee is
+held by `tests/test_provider_isolation.py`.
+
 A second CI job builds the Docker image and calls the MCP server inside the
 container. It exists because the image once shipped without installing the
 project: every unit test passed and the documented
