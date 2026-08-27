@@ -148,9 +148,18 @@ claude mcp add terminology -- \
 
 ### HTTP transport
 
-`terminology-mcp --transport streamable-http` binds to `127.0.0.1:8765`. It has
-**no authentication of any kind** and is for local development only. stdio is
-the supported path.
+`terminology-mcp --transport streamable-http` binds to `127.0.0.1:8765`.
+
+**Tested, unauthenticated, localhost only.** `tests/test_mcp_http.py` starts the
+server on an ephemeral port exactly as the flag says to, connects with the SDK's
+HTTP client and calls a tool, so the transport is exercised on every CI run
+rather than merely offered. What it does **not** have is authentication of any
+kind — anything that can reach the port can call every tool on it. Bind it to
+localhost, keep it there, and do not put it behind a reverse proxy and call that
+access control.
+
+stdio remains the supported path for clients: it is how MCP clients launch a
+local server, and it has no port for anything to reach.
 
 ---
 
