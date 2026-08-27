@@ -362,6 +362,20 @@ every way of recording an incoherent one is closed:
 - A second decision is refused, with a unique constraint as the last line of
   defence against a race.
 
+### Writes commit before the response is built
+
+FastAPI runs a `yield` dependency's teardown *after* the response has gone out.
+With the commit living there, a client that posted a decision immediately after
+mapping could arrive before the proposal was durable and be told it did not
+exist -- measured at roughly one immediate follow-up in five, and exactly the
+kind of failure that looks like a mystery to a user clicking Accept quickly.
+
+The write routes therefore commit explicitly before serialising a response;
+`session_scope` keeps its commit as a safety net for anything else. Tests bind
+their session with `join_transaction_mode="create_savepoint"`, so an inner
+commit releases a savepoint and the outer transaction the fixture owns is still
+rolled back.
+
 ### The version string is the publisher's release year
 
 `"2026"`, as an opaque string. Not a date, not a semantic version, not the

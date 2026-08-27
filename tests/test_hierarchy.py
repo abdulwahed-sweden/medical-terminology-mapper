@@ -275,7 +275,7 @@ def test_a_not_primary_code_can_still_be_accepted(
 ) -> None:
     """The validator may legitimately be coding a secondary diagnosis, so the
     flag informs and never blocks."""
-    from app.embeddings.fake import FakeEmbeddingProvider as FEP
+    from app.embeddings.fake import FakeEmbeddingProvider
     from app.llm.base import load_prompt
     from app.llm.fake import FakeLLMProvider
     from app.pipeline.map_term import map_term
@@ -288,7 +288,7 @@ def test_a_not_primary_code_can_still_be_accepted(
         version=icd10se_embedded,
         trace_id="t",
         settings=SETTINGS,
-        embedding_provider=FEP(dim=SETTINGS.embedding_dim),
+        embedding_provider=FakeEmbeddingProvider(dim=SETTINGS.embedding_dim),
         llm_provider=FakeLLMProvider(),
         prompt=load_prompt(),
     )

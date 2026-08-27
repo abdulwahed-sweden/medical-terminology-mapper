@@ -80,6 +80,9 @@ def create_decision(payload: DecisionRequest, session: SessionDep) -> ProposalOu
             detail=f"proposal {payload.proposal_id} has already been decided",
         ) from exc
 
+    # Durable before the response goes out -- see the note in routes_map.
+    session.commit()
+
     proposal = get_proposal(session, payload.proposal_id)
     assert proposal is not None  # record_decision would have raised
     return serialize_proposal(session, proposal)

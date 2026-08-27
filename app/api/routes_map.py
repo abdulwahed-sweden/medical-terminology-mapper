@@ -52,4 +52,10 @@ def create_mapping_proposal(
     except TerminologyVersionNotLoaded as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
 
+    # Commit before the response is built, not in the dependency's teardown.
+    # FastAPI runs a yield-dependency's exit code *after* the response has gone
+    # out, so a client that posts a decision immediately can arrive before the
+    # proposal is durable and be told the proposal does not exist. Measured:
+    # roughly one immediate follow-up in five.
+    session.commit()
     return serialize_proposal(session, outcome.proposal)

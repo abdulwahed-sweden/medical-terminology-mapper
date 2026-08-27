@@ -80,7 +80,15 @@ def connection(engine: Engine) -> Iterator[Connection]:
 
 @pytest.fixture
 def db_session(connection: Connection) -> Iterator[Session]:
-    maker = sessionmaker(bind=connection, expire_on_commit=False, future=True)
+    # `create_savepoint` keeps test isolation now that the write routes commit
+    # explicitly: the session's commit releases a SAVEPOINT, and the outer
+    # transaction this fixture owns is still rolled back at teardown.
+    maker = sessionmaker(
+        bind=connection,
+        expire_on_commit=False,
+        future=True,
+        join_transaction_mode="create_savepoint",
+    )
     session = maker()
     try:
         yield session

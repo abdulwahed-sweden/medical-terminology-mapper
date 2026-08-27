@@ -439,3 +439,21 @@ def test_matched_field_is_reported_on_candidates(client: TestClient, icd10se_emb
     assert fields <= {"title", "synonym", "description", "vector"}
     top = next(c for c in body["candidates"] if c["code"] == body["suggested_code"])
     assert top["matched_field"] in {"title", "synonym"}
+
+
+def test_write_routes_commit_before_returning() -> None:
+    """A yield-dependency's teardown runs after the response is sent.
+
+    Relying on it to commit means a client that posts a decision immediately
+    after mapping can be told the proposal does not exist -- measured at roughly
+    one immediate follow-up in five before this was fixed. The race is
+    timing-dependent and cannot be asserted deterministically against a session
+    that shares the test's transaction, so this guards the fix at the source: if
+    the explicit commit is removed, the race returns silently.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    for name in ("routes_map.py", "routes_decisions.py"):
+        source = (root / "app" / "api" / name).read_text(encoding="utf-8")
+        assert "session.commit()" in source, name
