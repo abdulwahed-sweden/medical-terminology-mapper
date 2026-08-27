@@ -1,21 +1,32 @@
 "use strict";
-/* Validator page behaviour.
+/* Validator page behaviour — Al-Noor v1.1 layout.
  *
- * Vanilla JS, one file, no build step. The interesting part of this project is
- * the audit trail, not the front end — this only has to be correct, keyboard
- * operable, and honest about what it is showing.
+ * Vanilla JS, one file, no build step. The state machine and every DOM id are
+ * unchanged from the previous revision; what changed is how each state is
+ * drawn.
+ *
+ * One thing deliberately NOT implemented from the design: the per-candidate
+ * match percentage. The prototype's figures were hand-authored constants, and
+ * no function of the real scores reproduces them. A bold percentage beside a
+ * diagnosis code claims a certainty this pipeline cannot support -- the same
+ * failure the retrieval gate exists to prevent. The slot carries the evidence
+ * that is real instead: source badges, the matched field, and the score bars.
  */
 
 const $ = (id) => document.getElementById(id);
 const DEFAULT_VISIBLE = 5;
 
-let proposal = null;      // the proposal currently on screen
-let pending = null;       // a decision awaiting confirmation
+let proposal = null;   // the proposal on screen
+let pending = null;    // a decision awaiting confirmation
 let showingAll = false;
+
+const FIELD_LABEL = {
+  title: "Term", synonym: "Synonym", description: "Beskrivning", vector: "Vektor",
+};
 
 /* ------------------------------------------------------------- utilities */
 
-function show(el, visible) { el.classList.toggle("hidden", !visible); }
+const show = (el, on) => el.classList.toggle("hidden", !on);
 
 function setError(el, message, input) {
   el.textContent = message || "";
@@ -26,12 +37,10 @@ function setError(el, message, input) {
   }
 }
 
-function num(value, digits = 3) {
-  return (value === null || value === undefined) ? "—" : Number(value).toFixed(digits);
-}
+const num = (v, d = 3) => (v === null || v === undefined ? "—" : Number(v).toFixed(d));
 
-function esc(value) {
-  return String(value === null || value === undefined ? "" : value)
+function esc(v) {
+  return String(v === null || v === undefined ? "" : v)
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
@@ -44,17 +53,24 @@ function stockholm(iso) {
   } catch { return iso; }
 }
 
-function hideAllStates() {
+function hideAll() {
   ["state-suggestion", "state-nomatch", "state-failed", "state-decided",
    "correct-block", "confirm-block", "evidence"].forEach((id) => show($(id), false));
 }
 
-function focusResult(el) {
+function focusState(el) {
   el.focus({ preventScroll: true });
   el.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-/* ----------------------------------------------------------------- /map */
+/* ------------------------------------------------------------------ /map */
+
+$("examples").addEventListener("click", (event) => {
+  const chip = event.target.closest("[data-example]");
+  if (!chip) return;
+  $("text").value = chip.dataset.example;
+  $("text").focus();
+});
 
 $("map-form").addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -67,7 +83,7 @@ $("map-form").addEventListener("submit", async (event) => {
   if (!validator) { $("validator_id").focus(); return; }
 
   const [system, version] = $("target").value.split("|");
-  setLoading(true);
+  loading(true);
   try {
     const response = await fetch("/map", {
       method: "POST",
@@ -80,14 +96,14 @@ $("map-form").addEventListener("submit", async (event) => {
     showingAll = false;
     render(body);
   } catch (err) {
-    hideAllStates();
+    hideAll();
     setError($("form-error"), String(err.message || err));
   } finally {
-    setLoading(false);
+    loading(false);
   }
 });
 
-function setLoading(on) {
+function loading(on) {
   $("submit").disabled = on;
   show($("spinner"), on);
   $("submit-label").textContent = on ? "Söker…" : "Föreslå kod";
@@ -96,8 +112,11 @@ function setLoading(on) {
 /* --------------------------------------------------------------- render */
 
 function render(p) {
-  hideAllStates();
+  hideAll();
   setError($("code-error"), "");
+  const where = `${p.target_system} · ${p.terminology_version}`;
+  $("s-system").textContent = where;
+  $("n-system").textContent = where;
 
   if (p.status === "no_good_match") renderNoMatch(p);
   else if (p.status === "rerank_failed") renderFailed(p);
@@ -111,103 +130,104 @@ function render(p) {
 function renderSuggestion(p) {
   $("s-code").textContent = p.suggested_code;
   $("s-term").textContent = p.suggested_term || "";
-
-  const context = [];
-  if (p.chapter_label) context.push(p.chapter_label);
-  $("s-context").textContent = context.join(" · ");
-  show($("s-context"), context.length > 0);
+  const top = (p.ranked || [])[0];
+  $("s-reason").textContent = top ? top.reason : "";
 
   if (p.provider_kind === "fake") {
     $("s-confidence").innerHTML =
-      '<span class="badge badge--test">Testleverantör — ingen säkerhetsskattning</span>';
+      '<span class="tag tag--test">Testleverantör — ingen säkerhetsskattning</span>';
+    $("s-note").textContent = "Ingen säkerhetsskattning i testläge";
   } else {
     $("s-confidence").textContent =
       `Modellens säkerhet: ${num(p.model_confidence, 2)} — modellens egen ` +
       `skattning, inte en kalibrerad sannolikhet.`;
+    $("s-note").textContent = "";
   }
-
-  const top = (p.ranked || [])[0];
-  $("s-reason").textContent = top ? top.reason : "";
-  show($("s-reason"), Boolean(top && top.reason));
-
   show($("state-suggestion"), true);
-  focusResult($("state-suggestion"));
+  focusState($("state-suggestion"));
 }
 
 function renderNoMatch(p) {
   $("n-summary").textContent =
-    `Sökningen på ”${p.input_text}” gav ingen tillräckligt stark träff i ` +
-    `${p.target_system} ${p.terminology_version}.`;
-  const g = p.gate || {};
-  const v = g.values || {};
-  let why;
-  if (g.fired) {
-    why = `Regeln ${g.id} (version ${g.version}) stoppade förslaget: ${g.reason}. ` +
-          `Bästa fulltextpoäng var ${num(v.best_ts_rank)} och bästa teckenlikhet ` +
-          `${num(v.best_strict_similarity)}.`;
-  } else {
-    why = "Modellen bedömde att ingen av kandidaterna passar.";
-  }
-  $("n-why").textContent = why + " Kandidaterna finns kvar under ”Kandidater och underlag”.";
+    `Ingen kod föreslås för ”${p.input_text}”.`;
+  const g = p.gate || {}, v = g.values || {};
+  $("n-why").textContent = g.fired
+    ? `Sökningen gav inget tillräckligt starkt underlag i ${p.target_system} ` +
+      `${p.terminology_version}. Regeln ${g.id} (v${g.version}) stoppade förslaget: ` +
+      `${g.reason}. Bästa fulltextpoäng ${num(v.best_ts_rank)}, bästa teckenlikhet ` +
+      `${num(v.best_strict_similarity)}. Modellen anropades inte.`
+    : "Modellen bedömde att ingen av kandidaterna passar.";
   show($("state-nomatch"), true);
-  focusResult($("state-nomatch"));
+  focusState($("state-nomatch"));
 }
 
-function renderFailed(p) {
+function renderFailed() {
   show($("state-failed"), true);
-  focusResult($("state-failed"));
+  focusState($("state-failed"));
 }
 
 /* -------------------------------------------------------------- evidence */
+
+function bar(value, kind) {
+  if (value === null || value === undefined) {
+    return `<span class="bar bar--absent"><span class="bar__track"></span>` +
+           `<span class="bar__val">—</span></span>`;
+  }
+  const pctWidth = Math.max(0, Math.min(1, Number(value))) * 100;
+  return `<span class="bar"><span class="bar__track">` +
+         `<span class="bar__fill bar__fill--${kind}" style="width:${pctWidth.toFixed(1)}%"></span>` +
+         `</span><span class="bar__val">${num(value)}</span></span>`;
+}
 
 function renderEvidence(p) {
   const isFake = p.provider_kind === "fake";
   show($("th-confidence"), !isFake);
 
-  const rankByCode = new Map((p.ranked || []).map((r, i) => [r.code, i + 1]));
-  const reasonByCode = new Map((p.ranked || []).map((r) => [r.code, r.reason]));
-  const confByCode = new Map((p.ranked || []).map((r) => [r.code, r.model_confidence]));
+  const rankBy = new Map((p.ranked || []).map((r, i) => [r.code, i + 1]));
+  const reasonBy = new Map((p.ranked || []).map((r) => [r.code, r.reason]));
+  const confBy = new Map((p.ranked || []).map((r) => [r.code, r.model_confidence]));
 
   const all = p.candidates || [];
   const rows = showingAll ? all : all.slice(0, DEFAULT_VISIBLE);
-  const FIELD = { title: "Term", synonym: "Synonym", description: "Beskrivning", vector: "Vektor" };
-
-  $("table-caption").textContent =
-    `${all.length} kandidater hämtades. Visar ${rows.length}.`;
+  $("table-caption").textContent = `${all.length} kandidater hämtades. Visar ${rows.length}.`;
 
   const body = $("cand-rows");
   body.innerHTML = "";
-  for (const c of rows) {
+  rows.forEach((c, index) => {
     const tr = document.createElement("tr");
-    const hasLexical = (c.sources || []).includes("lexical");
-    if (hasLexical) tr.classList.add("has-lexical");
-    if (c.code === p.suggested_code) tr.classList.add("is-suggested");
+    const isBest = index === 0;
+    if (isBest) tr.classList.add("is-best");
 
-    const sources = (c.sources || [])
-      .map((s) => `<span class="badge">${s === "lexical" ? "Lexikal" : "Vektor"}</span>`)
-      .join(" ");
-    const modelRank = rankByCode.has(c.code) ? `#${rankByCode.get(c.code)}` : "—";
-    const conf = isFake ? "" :
-      `<td class="num">${num(confByCode.get(c.code), 2)}</td>`;
+    const badges = (c.sources || [])
+      .map((s) => s === "lexical"
+        ? '<span class="tag tag--lex">Lexikal</span>'
+        : '<span class="tag">Vektor</span>').join("");
+    const bestPill = isBest ? '<span class="tag tag--best">Bästa träff</span>' : "";
+    const reason = reasonBy.get(c.code);
+    const conf = isFake ? "" : `<td class="num">${num(confBy.get(c.code), 2)}</td>`;
+    const modelRank = rankBy.has(c.code) ? `#${rankBy.get(c.code)}` : "—";
 
     tr.innerHTML =
-      `<td class="code-cell">${esc(c.code)}</td>` +
-      `<td>${esc(c.preferred_term)}</td>` +
-      `<td>${sources}</td>` +
-      `<td>${esc(FIELD[c.matched_field] || "—")}</td>` +
-      `<td class="num">${num(c.lexical_score)}</td>` +
-      `<td class="num">${num(c.vector_score)}</td>` +
-      `<td class="num">${num(c.fused_score, 5)}</td>` +
-      `<td class="num">${modelRank}</td>` + conf +
-      `<td>${esc(reasonByCode.get(c.code) || "")}</td>`;
+      `<td><span class="rank">${index + 1}</span></td>` +
+      `<td class="cell-code">${esc(c.code)}</td>` +
+      `<td><span class="cell-term">${esc(c.preferred_term)}</span>` +
+        `<span class="cell-sub">${bestPill}${badges}` +
+        (reason ? `<span class="cell-reason">${esc(reason)}</span>` : "") +
+        `</span></td>` +
+      `<td><span class="tag tag--field">${esc(FIELD_LABEL[c.matched_field] || "—")}</span></td>` +
+      `<td>${bar(c.lexical_score, "lex")}</td>` +
+      `<td>${bar(c.vector_score, "vec")}</td>` +
+      `<td class="num">${num(c.fused_score, 5)}<br>` +
+        `<span class="bar__val">${modelRank}</span></td>` + conf +
+      `<td><button type="button" class="btn btn--sm" data-choose="${esc(c.code)}">Välj</button></td>`;
     body.appendChild(tr);
-  }
+  });
 
   const more = all.length > DEFAULT_VISIBLE;
   show($("btn-show-all"), more);
   if (more) {
     $("btn-show-all").textContent = showingAll
-      ? `Visa färre kandidater` : `Visa alla ${all.length} kandidater`;
+      ? "Visa färre kandidater" : `Visa alla ${all.length} kandidater`;
   }
 }
 
@@ -216,79 +236,62 @@ $("btn-show-all").addEventListener("click", () => {
   renderEvidence(proposal);
 });
 
-/* ----------------------------------------------------------- traceability */
+/* Choosing a candidate records it as the decision. If it is the code the
+ * system already suggested, that is an `accept`; anything else is a
+ * `correct`. The two mean different things in the audit trail. */
+$("cand-rows").addEventListener("click", (event) => {
+  const button = event.target.closest("[data-choose]");
+  if (!button || !proposal) return;
+  const code = button.dataset.choose;
+  if (proposal.suggested_code && code === proposal.suggested_code) askConfirm("accept", null);
+  else askConfirm("correct", code);
+});
+
+/* ---------------------------------------------------------- traceability */
+
+function termRow(key, value, isCode) {
+  return `<div class="terminal__row"><span class="terminal__key">${esc(key)}</span>` +
+         `<span class="terminal__val${isCode ? " terminal__val--code" : ""}">${esc(value)}</span></div>`;
+}
 
 function renderTrace(p) {
   const g = p.gate || {};
-  const rows = [
-    ["Förslag-id", p.id, true],
-    ["Spårnings-id", p.trace_id, true],
-    ["Kodverk och version", `${p.target_system} ${p.terminology_version}`, false],
-    ["LLM-leverantör och modell", `${p.llm_provider} / ${p.llm_model}`, false],
-    ["Prompt", `${p.prompt_id} · ${String(p.prompt_hash).slice(0, 12)}…`, true, p.prompt_hash],
-    ["Inbäddning", `${p.embedding_provider} / ${p.embedding_model}`, false],
-    ["Regel (gate)", `${g.id} v${g.version} · ${g.fired ? "stoppade" : "släppte igenom"}`, false],
-    ["Regelns värden", JSON.stringify(g.values || {}), true],
-    ["Hämtningstid", `${p.latency_ms_retrieval} ms`, false],
-    ["Omrankningstid", `${p.latency_ms_rerank} ms`, false],
-  ];
-
-  const box = $("trace-body");
-  box.innerHTML = "";
-  for (const [label, value, copyable, fullValue] of rows) {
-    const row = document.createElement("div");
-    row.className = "trace-row";
-    row.innerHTML = `<span class="label">${esc(label)}</span>` +
-                    `<span class="value">${esc(value)}</span>`;
-    if (copyable) {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "btn btn--small";
-      btn.textContent = "Kopiera";
-      btn.setAttribute("aria-label", `Kopiera ${label}`);
-      const confirmation = document.createElement("span");
-      confirmation.className = "copied hidden";
-      confirmation.textContent = "kopierat";
-      confirmation.setAttribute("role", "status");
-      btn.addEventListener("click", async () => {
-        const payload = String(fullValue !== undefined ? fullValue : value);
-        try { await navigator.clipboard.writeText(payload); }
-        catch { /* clipboard unavailable; the value is on screen regardless */ }
-        show(confirmation, true);
-        setTimeout(() => show(confirmation, false), 2000);
-      });
-      row.appendChild(btn);
-      row.appendChild(confirmation);
-    }
-    box.appendChild(row);
-  }
+  $("trace-body").innerHTML = [
+    termRow("förslag-id", p.id),
+    termRow("spårnings-id", p.trace_id),
+    termRow("kodverk", `${p.target_system} ${p.terminology_version}`),
+    termRow("modell", `${p.llm_provider} / ${p.llm_model}`),
+    termRow("prompt", `${p.prompt_id} · sha256 ${p.prompt_hash}`),
+    termRow("inbäddning", `${p.embedding_provider} / ${p.embedding_model}`),
+    termRow("regel", `${g.id} v${g.version} · ${g.fired ? "stoppade" : "släppte igenom"}`),
+    termRow("regelvärden", JSON.stringify(g.values || {})),
+    termRow("tider", `hämtning ${p.latency_ms_retrieval} ms · omrankning ${p.latency_ms_rerank} ms`),
+  ].join("");
 }
 
-/* -------------------------------------------------------------- decisions */
+/* ------------------------------------------------------------- decisions */
 
-function codeHint() {
-  const system = proposal ? proposal.target_system : "";
-  return system === "kva"
-    ? "Fem tecken, till exempel AF015 eller AAA00."
-    : "Bokstav och två siffror, eventuellt med punkt, till exempel I15.9.";
-}
+const codeHint = () => (proposal && proposal.target_system === "kva")
+  ? "Fem tecken, till exempel AF015 eller AAA00."
+  : "Bokstav och två siffror, eventuellt med punkt, till exempel I15.9.";
 
-function openCorrect() {
+function openCorrect(prefill) {
   $("code-hint").textContent = codeHint();
+  if (prefill) $("final_code").value = prefill;
   show($("correct-block"), true);
   setError($("code-error"), "", $("final_code"));
   $("final_code").focus();
 }
 
-$("btn-correct").addEventListener("click", openCorrect);
-$("btn-nomatch-correct").addEventListener("click", openCorrect);
-$("btn-failed-correct").addEventListener("click", openCorrect);
+$("btn-correct").addEventListener("click", () => openCorrect());
+$("btn-nomatch-correct").addEventListener("click", () => openCorrect());
+$("btn-failed-correct").addEventListener("click", () => openCorrect());
 $("btn-correct-cancel").addEventListener("click", () => {
   show($("correct-block"), false);
   $("btn-correct").focus();
 });
 
-$("btn-accept").addEventListener("click", () => submitDecision("accept", null));
+$("btn-accept").addEventListener("click", () => askConfirm("accept", null));
 $("btn-reject").addEventListener("click", () => askConfirm("reject", null));
 $("btn-nomatch-confirm").addEventListener("click", () => askConfirm("reject", null));
 $("btn-failed-reject").addEventListener("click", () => askConfirm("reject", null));
@@ -303,20 +306,24 @@ $("btn-correct-submit").addEventListener("click", () => {
   askConfirm("correct", code);
 });
 
-$("final_code").addEventListener("keydown", (e) => {
-  if (e.key === "Enter") { e.preventDefault(); $("btn-correct-submit").click(); }
+$("final_code").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") { event.preventDefault(); $("btn-correct-submit").click(); }
 });
 
 function askConfirm(kind, code) {
   pending = { kind, code };
   const validator = $("validator_id").value.trim();
   const where = `${proposal.target_system} ${proposal.terminology_version}`;
-  $("confirm-text").textContent = kind === "reject"
-    ? `Ingen kod registreras för ”${proposal.input_text}”. Beslutet sparas som ` +
-      `avslag av ${validator}.`
-    : `Koden ${code} registreras för ”${proposal.input_text}” i ${where}, av ${validator}.`;
+  const term = proposal.input_text;
+  $("confirm-text").textContent =
+    kind === "reject"
+      ? `Ingen kod registreras för ”${term}”. Beslutet sparas som avslag av ${validator}.`
+      : kind === "accept"
+        ? `Koden ${proposal.suggested_code} registreras för ”${term}” i ${where}, av ${validator}.`
+        : `Koden ${code} registreras för ”${term}” i ${where}, av ${validator}.`;
   show($("confirm-block"), true);
   $("btn-confirm-yes").focus();
+  $("confirm-block").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 $("btn-confirm-no").addEventListener("click", () => {
@@ -355,6 +362,7 @@ async function submitDecision(kind, finalCode) {
       const message = detailOf(body) || response.statusText;
       show($("confirm-block"), false);
       if (kind === "correct") {
+        openCorrect(finalCode);
         setError($("code-error"), message, $("final_code"));
         $("final_code").focus();
       } else {
@@ -372,32 +380,23 @@ async function submitDecision(kind, finalCode) {
 function renderDecision(p) {
   const d = p.decision;
   const words = { accept: "Godkänt", reject: "Avslaget", correct: "Korrigerat" };
-  const fields = [
-    ["Beslut", words[d.decision] || d.decision],
-    ["Validerare", d.validator_id],
-    ["Kod", d.final_code || "Ingen kod registrerad"],
-    ["Kodverk och version", `${p.target_system} ${p.terminology_version}`],
-    ["Tidpunkt", stockholm(d.created_at)],
+  $("d-when").textContent = stockholm(d.created_at);
+
+  const rows = [
+    ["system", p.target_system, false],
+    ["version", p.terminology_version, false],
+    ["kod", d.final_code || "Ingen kod registrerad", Boolean(d.final_code)],
+    ["beslut", words[d.decision] || d.decision, false],
+    ["validerare", d.validator_id, false],
+    ["beslut-id", d.id, false],
   ];
-  if (d.validator_note) fields.push(["Kommentar", d.validator_note]);
-
-  const dl = $("d-fields");
-  dl.innerHTML = "";
-  for (const [label, value] of fields) {
-    const dt = document.createElement("dt"); dt.textContent = label;
-    const dd = document.createElement("dd"); dd.textContent = value;
-    dl.appendChild(dt); dl.appendChild(dd);
-  }
-
-  show($("d-json-wrap"), Boolean(p.validated_mapping));
-  if (p.validated_mapping) {
-    $("d-json").textContent = JSON.stringify(p.validated_mapping, null, 2);
-  }
+  if (d.validator_note) rows.push(["kommentar", d.validator_note, false]);
+  $("d-fields").innerHTML = rows.map(([k, v, c]) => termRow(k, v, c)).join("");
 
   ["state-suggestion", "state-nomatch", "state-failed",
    "correct-block", "confirm-block"].forEach((id) => show($(id), false));
   show($("state-decided"), true);
-  focusResult($("state-decided"));
+  focusState($("state-decided"));
 }
 
 function detailOf(body) {

@@ -1,6 +1,8 @@
 # Design Change Plan — Validator UI (Al-Noor Design System v1.1)
 
-**Status: PLAN ONLY. Nothing in this document has been implemented.**
+**Status: IMPLEMENTED (phases 1, 2 and 4).** Phases 3 (self-hosted fonts),
+5 (autocomplete) and 6 (bilingual toggle) are **not** implemented — see §9 and
+the decisions recorded in §12.
 
 Source: `Clinical mapping.zip` → `design_handoff_terminology_mapper/`
 (`README.md`, `DESIGN-SYSTEM-v1.1.md`, `Terminology Mapper v2.dc.html`).

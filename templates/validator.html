@@ -9,230 +9,279 @@
 <body>
 <a class="skip-link" href="#resultat">Hoppa till resultatet</a>
 
+<header class="brand">
+  <div class="brand__inner">
+    <span class="brand__mark" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+           stroke-width="2" stroke-linecap="round">
+        <circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 L14.5 14.5"></path>
+      </svg>
+    </span>
+    <div class="brand__text">
+      <h1 class="brand__title">Kartläggning av kliniska termer</h1>
+      <p class="brand__sub">Fritext till ICD-10-SE och KVÅ — med obligatorisk mänsklig validering</p>
+    </div>
+    <div class="brand__aside">
+      <span class="pill-offline">
+        <span class="dot" aria-hidden="true"></span>
+        {% if provider_kind == "fake" %}Testläge · offline{% else %}Aktiv leverantör{% endif %}
+      </span>
+    </div>
+  </div>
+</header>
+
 <div class="wrap">
-  <header>
-    <h1 class="site-title">Kartläggning av kliniska termer</h1>
-    <p class="site-purpose">
-      Från fritext till standardiserad kod i ICD-10-SE och KVÅ, med obligatorisk
-      mänsklig validering.
-    </p>
+  <div class="notice">
+    <p><b>Beslutsstöd, inte automatisk kodning.</b>
+    Systemet föreslår; du beslutar. Ingen kod är giltig förrän ett beslut har
+    registrerats, och beslut kan varken ändras eller tas bort.</p>
+  </div>
 
-    <div class="notice">
-      <p>
-        <span class="notice__label">Beslutsstöd, inte automatisk kodning.</span>
-        Systemet föreslår; du beslutar. Ingen kod är giltig förrän ett beslut har
-        registrerats, och beslut kan varken ändras eller tas bort.
-      </p>
-    </div>
+  {% if provider_kind == "fake" %}
+  <div class="notice notice--test" role="note">
+    <p><b>Testläge.</b>
+    Rankning och inbäddning sker med deterministiska testleverantörer. Ingen
+    säkerhetsskattning visas, och förslagen säger inget om kvaliteten i en
+    verklig kartläggning.</p>
+  </div>
+  {% endif %}
 
-    {% if provider_kind == "fake" %}
-    <div class="notice notice--warn" role="note">
-      <p>
-        <span class="notice__label">Testläge.</span>
-        Rankning och inbäddning sker med deterministiska testleverantörer.
-        Ingen säkerhetsskattning visas, och förslagen säger inget om kvaliteten
-        i en verklig kartläggning.
-      </p>
-    </div>
-    {% endif %}
-
-    {% if not versions %}
-    <div class="notice notice--warn" role="note">
-      <p>
-        <span class="notice__label">Ingen terminologi är laddad.</span>
-        Kör <code>scripts/load_terminology.py</code> och därefter
-        <code>scripts/embed_terminology.py</code>.
-      </p>
-    </div>
-    {% endif %}
-  </header>
+  {% if not versions %}
+  <div class="notice notice--test" role="note">
+    <p><b>Ingen terminologi är laddad.</b>
+    Kör <code>scripts/load_terminology.py</code> och därefter
+    <code>scripts/embed_terminology.py</code>.</p>
+  </div>
+  {% endif %}
 
   <main>
-    <!-- 1 ------------------------------------------------------------ input -->
+    <!-- ===================================================== 1 · search -->
     <section class="card" aria-labelledby="sok-rubrik">
-      <h2 id="sok-rubrik">Sök kod</h2>
-      <form id="map-form" autocomplete="off" novalidate>
-        <div class="field">
-          <label for="text">Klinisk term</label>
-          <span class="hint" id="text-hint">Skriv termen så som den står i journalen, till exempel “högt blodtryck”.</span>
-          <input type="text" id="text" name="text" maxlength="500" required autofocus
-                 aria-describedby="text-hint text-error" placeholder="högt blodtryck">
-          <p class="error-text hidden" id="text-error"></p>
-        </div>
-
-        <div class="field-row">
-          <div class="field">
-            <label for="target">Kodverk och version</label>
-            <span class="hint" id="target-hint">Förslaget beräknas mot den valda versionen.</span>
-            <select id="target" name="target" aria-describedby="target-hint">
-              {% for v in versions %}
-              <option value="{{ v.system }}|{{ v.version }}">{{ v.system }} {{ v.version }} ({{ v.count }} begrepp)</option>
-              {% endfor %}
-            </select>
+      <div class="card__head">
+        <span class="step" aria-hidden="true">1</span>
+        <h2 class="card__title" id="sok-rubrik">Sök kod</h2>
+        <span class="card__meta">Fritext från journalen</span>
+      </div>
+      <div class="card__body">
+        <form id="map-form" autocomplete="off" novalidate>
+          <label class="label" for="text">Klinisk term</label>
+          <div class="searchbar">
+            <span class="searchbar__icon" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round">
+                <circle cx="7" cy="7" r="4.5"></circle><path d="M10.5 10.5 L14.5 14.5"></path>
+              </svg>
+            </span>
+            <input type="text" id="text" name="text" class="field-input" maxlength="500" required
+                   placeholder="t.ex. högt blodtryck"
+                   aria-describedby="text-hint text-error">
+            <button type="submit" class="btn btn--primary" id="submit"
+                    {% if not versions %}disabled{% endif %}>
+              <span class="spinner hidden" id="spinner" aria-hidden="true"></span>
+              <span id="submit-label">Föreslå kod</span>
+            </button>
           </div>
-          <div class="field">
-            <label for="validator_id">Validerare</label>
-            <span class="hint" id="validator-hint">Sparas i loggen tillsammans med ditt beslut.</span>
-            <input type="text" id="validator_id" name="validator_id" maxlength="128" required
-                   aria-describedby="validator-hint validator-error" placeholder="namn eller signatur">
-            <p class="error-text hidden" id="validator-error"></p>
-          </div>
-        </div>
+          <span class="hint" id="text-hint">Skriv termen så som den står i journalen.</span>
+          <p class="error hidden" id="text-error"></p>
 
-        <button type="submit" class="btn btn--primary" id="submit"
-                {% if not versions %}disabled{% endif %}>
-          <span class="spinner hidden" id="spinner" aria-hidden="true"></span>
-          <span id="submit-label">Föreslå kod</span>
-        </button>
-        <p class="error-text hidden" id="form-error" role="alert"></p>
-      </form>
+          <div class="chips" id="examples" role="group" aria-label="Exempeltermer">
+            <button type="button" class="chip" data-example="högt blodtryck">högt blodtryck</button>
+            <button type="button" class="chip" data-example="akut hjärtinfarkt">akut hjärtinfarkt</button>
+            <button type="button" class="chip" data-example="astma">astma</button>
+            <button type="button" class="chip" data-example="blodtrycksmätning">blodtrycksmätning</button>
+          </div>
+
+          <div class="grid-2">
+            <div>
+              <label class="label" for="target">Kodverk och version</label>
+              <select id="target" name="target" class="control" aria-describedby="target-hint">
+                {% for v in versions %}
+                <option value="{{ v.system }}|{{ v.version }}">{{ v.system }} {{ v.version }} ({{ v.count }} begrepp)</option>
+                {% endfor %}
+              </select>
+              <span class="hint" id="target-hint">Förslaget beräknas mot den valda versionen.</span>
+            </div>
+            <div>
+              <label class="label" for="validator_id">Validerare</label>
+              <input type="text" id="validator_id" name="validator_id" class="control" maxlength="128"
+                     required placeholder="namn eller signatur"
+                     aria-describedby="validator-hint validator-error">
+              <span class="hint" id="validator-hint">Sparas i loggen tillsammans med ditt beslut.</span>
+              <p class="error hidden" id="validator-error"></p>
+            </div>
+          </div>
+          <p class="error hidden" id="form-error" role="alert"></p>
+        </form>
+      </div>
     </section>
 
-    <!-- 2 ----------------------------------------------------------- result -->
-    <div id="resultat" aria-live="polite" aria-atomic="false">
+    <!-- ===================================================== 2 · result -->
+    <div id="resultat" aria-live="polite">
 
-      <!-- 2a: a suggestion -->
-      <section class="card card--result card--suggestion hidden" id="state-suggestion"
+      <!-- 2a suggestion -->
+      <section class="card state state--suggestion hidden" id="state-suggestion"
                aria-labelledby="forslag-rubrik" tabindex="-1">
-        <span class="status-label status-label--suggestion">Förslag</span>
-        <h2 id="forslag-rubrik" class="visually-hidden">Föreslagen kod</h2>
-        <div class="code-display">
-          <span class="code" id="s-code"></span>
-          <span class="term" id="s-term"></span>
+        <div class="card__head">
+          <span class="step" aria-hidden="true">2</span>
+          <h2 class="card__title" id="forslag-rubrik">Förslag</h2>
+          <span class="card__meta" id="s-system"></span>
         </div>
-        <p class="meta-line hidden" id="s-context"></p>
-        <p class="meta-line" id="s-confidence"></p>
-        <p class="reason-line" id="s-reason"></p>
-
-        <div class="actions" id="s-actions">
-          <button type="button" class="btn btn--accept" id="btn-accept">Godkänn förslaget</button>
-          <button type="button" class="btn btn--reject" id="btn-reject">Avslå</button>
-          <button type="button" class="btn" id="btn-correct">Korrigera…</button>
+        <div class="card__body">
+          <div class="hero">
+            <span class="code-badge" id="s-code"></span>
+            <div class="hero__text">
+              <p class="hero__term" id="s-term"></p>
+              <p class="hero__reason" id="s-reason"></p>
+              <p class="hero__meta" id="s-confidence"></p>
+            </div>
+          </div>
+          <div class="actions" id="s-actions">
+            <button type="button" class="btn btn--accept" id="btn-accept">Godkänn förslaget</button>
+            <button type="button" class="btn btn--reject" id="btn-reject">Avslå</button>
+            <button type="button" class="btn" id="btn-correct">Korrigera…</button>
+            <span class="actions__note" id="s-note"></span>
+          </div>
         </div>
       </section>
 
-      <!-- 2b: no good match -->
-      <section class="card card--result card--nomatch hidden" id="state-nomatch"
+      <!-- 2b no good match -->
+      <section class="card state state--nomatch hidden" id="state-nomatch"
                aria-labelledby="ingen-rubrik" tabindex="-1">
-        <span class="status-label status-label--nomatch">Ingen tillräcklig träff</span>
-        <h2 id="ingen-rubrik">Ingen kod föreslås</h2>
-        <p id="n-summary"></p>
-        <p class="meta-line" id="n-why"></p>
-        <div class="actions">
-          <button type="button" class="btn btn--reject" id="btn-nomatch-confirm">Bekräfta: ingen kod</button>
-          <button type="button" class="btn" id="btn-nomatch-correct">Ange kod manuellt…</button>
+        <div class="card__head">
+          <span class="step" aria-hidden="true">2</span>
+          <h2 class="card__title" id="ingen-rubrik">Ingen tillräcklig träff</h2>
+          <span class="card__meta" id="n-system"></span>
+        </div>
+        <div class="card__body">
+          <p class="hero__term" id="n-summary"></p>
+          <p class="hero__reason" id="n-why"></p>
+          <div class="actions">
+            <button type="button" class="btn btn--amber" id="btn-nomatch-confirm">Bekräfta: ingen kod</button>
+            <button type="button" class="btn" id="btn-nomatch-correct">Ange kod manuellt…</button>
+          </div>
         </div>
       </section>
 
-      <!-- 2c: reranking failed -->
-      <section class="card card--result card--failed hidden" id="state-failed"
+      <!-- 2c rerank failed -->
+      <section class="card state state--failed hidden" id="state-failed"
                aria-labelledby="fel-rubrik" tabindex="-1">
-        <span class="status-label status-label--failed">Omrankning misslyckades</span>
-        <h2 id="fel-rubrik">Modellen kunde inte rangordna kandidaterna</h2>
-        <p id="f-summary">
-          Försöket är registrerat i loggen. Kandidaterna nedan hämtades utan
-          modellens hjälp, och du kan fatta beslut ändå.
-        </p>
-        <div class="actions">
-          <button type="button" class="btn btn--reject" id="btn-failed-reject">Avslå</button>
-          <button type="button" class="btn" id="btn-failed-correct">Ange kod manuellt…</button>
+        <div class="card__head">
+          <span class="step" aria-hidden="true">2</span>
+          <h2 class="card__title" id="fel-rubrik">Omrankning misslyckades</h2>
+        </div>
+        <div class="card__body">
+          <p class="hero__reason" id="f-summary">
+            Försöket är registrerat i loggen. Kandidaterna nedan hämtades utan
+            modellens hjälp, och du kan fatta beslut ändå.
+          </p>
+          <div class="actions">
+            <button type="button" class="btn btn--reject" id="btn-failed-reject">Avslå</button>
+            <button type="button" class="btn" id="btn-failed-correct">Ange kod manuellt…</button>
+          </div>
         </div>
       </section>
 
       <!-- shared: manual code entry -->
-      <section class="card hidden" id="correct-block" aria-labelledby="korr-rubrik">
-        <h2 id="korr-rubrik">Ange rätt kod</h2>
-        <div class="field-row">
-          <div class="field">
-            <label for="final_code">Kod</label>
-            <span class="hint" id="code-hint"></span>
-            <input type="text" id="final_code" maxlength="32"
-                   aria-describedby="code-hint code-error">
-            <p class="error-text hidden" id="code-error" role="alert"></p>
-          </div>
-          <div class="field" style="flex: 2 1 260px;">
-            <label for="note">Kommentar <span class="hint" style="display:inline">(valfri)</span></label>
-            <span class="hint" id="note-hint">Till exempel varför förslaget var fel.</span>
-            <input type="text" id="note" maxlength="500" aria-describedby="note-hint">
-          </div>
+      <section class="card hidden" id="correct-block" aria-labelledby="korr-rubrik"
+               style="border:2px solid var(--teal)">
+        <div class="card__head" style="background:var(--teal-tint)">
+          <span class="step" aria-hidden="true">✎</span>
+          <h2 class="card__title" id="korr-rubrik">Ange rätt kod</h2>
         </div>
-        <div class="actions" style="border-top:none; padding-top:0; margin-top:0;">
-          <button type="button" class="btn btn--primary" id="btn-correct-submit">Registrera kod</button>
-          <button type="button" class="btn" id="btn-correct-cancel">Avbryt</button>
+        <div class="card__body">
+          <div class="grid-correct">
+            <div>
+              <label class="label" for="final_code">Kod</label>
+              <input type="text" id="final_code" class="control" maxlength="32"
+                     style="font-family:var(--mono);color:var(--blue)"
+                     aria-describedby="code-hint code-error">
+              <span class="hint" id="code-hint"></span>
+            </div>
+            <div>
+              <label class="label" for="note">Kommentar (valfri)</label>
+              <input type="text" id="note" class="control" maxlength="500"
+                     aria-describedby="note-hint">
+              <span class="hint" id="note-hint">Till exempel varför förslaget var fel.</span>
+            </div>
+          </div>
+          <p class="error hidden" id="code-error" role="alert"></p>
+          <div class="actions">
+            <button type="button" class="btn btn--primary" id="btn-correct-submit">Registrera kod</button>
+            <button type="button" class="btn" id="btn-correct-cancel">Avbryt</button>
+          </div>
         </div>
       </section>
 
-      <!-- shared: confirmation -->
-      <section class="card hidden" id="confirm-block" aria-labelledby="bekr-rubrik" role="group">
-        <h2 id="bekr-rubrik">Bekräfta beslutet</h2>
-        <p id="confirm-text"></p>
-        <p class="meta-line">Beslutet sparas permanent och kan inte ändras eller tas bort.</p>
-        <div class="actions" style="border-top:none; padding-top:0; margin-top:0;">
-          <button type="button" class="btn btn--primary" id="btn-confirm-yes">Ja, registrera</button>
-          <button type="button" class="btn" id="btn-confirm-no">Avbryt</button>
+      <!-- shared: confirm -->
+      <section class="confirm hidden" id="confirm-block" aria-labelledby="bekr-rubrik" role="group">
+        <h2 class="confirm__title" id="bekr-rubrik">Bekräfta beslutet</h2>
+        <p class="confirm__what" id="confirm-text"></p>
+        <p class="confirm__note">Beslutet sparas permanent och kan inte ändras eller tas bort.</p>
+        <div class="actions">
+          <button type="button" class="btn btn--onDeep" id="btn-confirm-yes">Ja, registrera</button>
+          <button type="button" class="btn btn--outlineDeep" id="btn-confirm-no">Avbryt</button>
         </div>
       </section>
 
-      <!-- 2d: decision recorded -->
-      <section class="card card--result card--decided hidden" id="state-decided"
+      <!-- 2d decided -->
+      <section class="card state state--decided hidden" id="state-decided"
                aria-labelledby="beslut-rubrik" tabindex="-1">
-        <span class="status-label status-label--decided">Beslut registrerat</span>
-        <h2 id="beslut-rubrik">Beslutet är sparat</h2>
-        <dl class="dl" id="d-fields"></dl>
-        <details id="d-json-wrap">
-          <summary>Visa validerad kartläggning som JSON</summary>
-          <div class="details-body"><pre class="trace-row" id="d-json" style="margin:0"></pre></div>
-        </details>
+        <div class="card__head">
+          <span class="step" aria-hidden="true">✓</span>
+          <h2 class="card__title" id="beslut-rubrik">Beslut registrerat</h2>
+          <span class="card__meta" id="d-when"></span>
+        </div>
+        <div class="card__body">
+          <div class="terminal" id="d-fields"></div>
+        </div>
       </section>
 
-      <!-- 3 --------------------------------------------------- evidence -->
+      <!-- =================================================== 3 · evidence -->
       <section class="card hidden" id="evidence" aria-labelledby="kand-rubrik">
-        <h2 id="kand-rubrik">Kandidater och underlag</h2>
-        <p class="table-legend" id="table-legend">
-          — betyder att kandidaten inte återfanns av det steget.
-          Blå kantlinje markerar en lexikal träff.
+        <div class="card__head">
+          <span class="step step--neutral" aria-hidden="true">3</span>
+          <h2 class="card__title" id="kand-rubrik">Kandidater och underlag</h2>
+          <span class="card__meta" id="table-legend">— betyder att kandidaten inte återfanns av det steget</span>
+        </div>
+        <p class="legend visually-hidden" id="legend-a11y">
+          Blå kantlinje och större text markerar bästa träffen.
         </p>
-        <div class="table-scroll">
-          <table aria-describedby="table-legend">
+        <div class="table-wrap">
+          <table aria-describedby="table-legend legend-a11y">
             <caption id="table-caption"></caption>
             <thead>
               <tr>
+                <th scope="col"><span class="visually-hidden">Rang</span>#</th>
                 <th scope="col">Kod</th>
                 <th scope="col">Term</th>
-                <th scope="col">Källa</th>
                 <th scope="col">Träff i</th>
-                <th scope="col" class="num">Lexikal</th>
-                <th scope="col" class="num">Vektor</th>
+                <th scope="col">Lexikal</th>
+                <th scope="col">Vektor</th>
                 <th scope="col" class="num">RRF</th>
-                <th scope="col" class="num">Modellrang</th>
                 <th scope="col" class="num" id="th-confidence">Modellens säkerhet</th>
-                <th scope="col">Motivering</th>
+                <th scope="col"><span class="visually-hidden">Åtgärd</span></th>
               </tr>
             </thead>
             <tbody id="cand-rows"></tbody>
           </table>
         </div>
-        <div class="actions" style="border-top:none; padding-top:var(--s-3); margin-top:0;">
-          <button type="button" class="btn btn--small hidden" id="btn-show-all"></button>
+        <div class="card__body" style="padding-top:var(--s-4)">
+          <button type="button" class="btn btn--sm hidden" id="btn-show-all"></button>
         </div>
-
-        <!-- 4 ------------------------------------------------ traceability -->
         <details id="trace">
           <summary>Spårbarhet</summary>
-          <div class="details-body" id="trace-body"></div>
+          <div class="details-body"><div class="terminal" id="trace-body"></div></div>
         </details>
       </section>
     </div>
   </main>
-
-  <footer class="site-footer">
-    <p>
-      Rankning: <code>{{ llm_provider }} / {{ llm_model }}</code> ·
-      Inbäddning: <code>{{ embedding_provider }} / {{ embedding_model }}</code> ·
-      Version {{ app_version }}
-    </p>
-  </footer>
 </div>
+
+<footer class="foot">
+  Rankning <code>{{ llm_provider }} / {{ llm_model }}</code> ·
+  Inbäddning <code>{{ embedding_provider }} / {{ embedding_model }}</code> ·
+  Version {{ app_version }}
+</footer>
 
 <script src="/static/validator.js"></script>
 </body>

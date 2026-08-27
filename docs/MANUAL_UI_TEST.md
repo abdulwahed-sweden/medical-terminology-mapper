@@ -14,9 +14,9 @@ docker compose exec app python scripts/embed_terminology.py \
     --system icd10se --version 2026-sample --provider fake
 ```
 
-Open <http://localhost:8000/>. With the bundled providers you should see an
-orange **Testläge** band under the blue notice. Fill in *Validerare* once; it
-stays for the session.
+Open <http://localhost:8000/>. You should see a teal brand bar with an
+**offline pill**, and an amber **Testläge** notice under the quiet grey one.
+Fill in *Validerare* once; it stays for the session.
 
 ---
 
@@ -24,14 +24,19 @@ stays for the session.
 
 - [ ] Type `högt blodtryck`, press **Enter** (no mouse). The button shows
       *Söker…* and is disabled while the request runs.
-- [ ] Result card is headed **Förslag** with a blue left edge. `I10` appears
-      large in monospace with its Swedish term beside it.
+- [ ] Result card is headed **Förslag**, framed 2px teal with a tinted header
+      strip and step badge **2**. `I10` appears as a large blue code badge with
+      its Swedish term beside it.
 - [ ] Instead of a number there is a badge: **Testleverantör — ingen
       säkerhetsskattning**. No decimal anywhere near the code.
 - [ ] The three buttons sit *directly under* the suggestion — you do not scroll
       past a table to reach them.
-- [ ] Under **Kandidater och underlag**: one table, five rows, a *Visa alla N
-      kandidater* button, and rows with a lexical hit carry a blue left edge.
+- [ ] Under **Kandidater och underlag** (step badge **3**): one table, five
+      rows, a *Visa alla N kandidater* button. The first row is the best match —
+      tinted, 4px teal left edge, teal rank badge, **Bästa träff** pill.
+- [ ] Each row shows a **Lexikal** and **Vektor** bar; a candidate the step did
+      not return shows an empty bar and **—**, never a zero.
+- [ ] **No percentage figure appears anywhere.**
 - [ ] Press **Godkänn förslaget**. The card turns green, headed **Beslut
       registrerat**, listing decision, validator, code, version and a timestamp
       in Swedish local format. The JSON is hidden inside a `<details>`.
@@ -67,6 +72,14 @@ stays for the session.
 - [ ] Press **Bekräfta: ingen kod**, confirm. Recorded as an *Avslaget*
       decision with no code.
 
+## 5b · Choose a candidate directly
+
+- [ ] Map `högt blodtryck`, then press **Välj** on a row that is *not* the
+      suggestion. The confirm panel names that code; confirming records it as
+      **Korrigerat**.
+- [ ] Repeat, pressing **Välj** on the suggested code itself. It is recorded as
+      **Godkänt**, not as a correction — the two mean different things.
+
 ## 5 · No good match → manual code
 
 - [ ] Type `banan` again, press **Ange kod manuellt…**, enter `I10`, confirm.
@@ -82,8 +95,8 @@ Unplug the mouse, or just do not touch it.
       2px focus ring — including the `<details>` summaries and each **Kopiera**
       button.
 - [ ] `Enter` submits the search form and the code field.
-- [ ] Expand **Spårbarhet** with the keyboard, tab to a **Kopiera** button,
-      press Enter: *kopierat* appears next to it, then disappears.
+- [ ] Expand **Spårbarhet** with the keyboard; the trace renders as terminal
+      lines and the values are selectable text.
 - [ ] Nothing traps focus.
 
 ## 7 · Small viewport (360px)
@@ -97,10 +110,9 @@ Unplug the mouse, or just do not touch it.
 ## 8 · Traceability
 
 - [ ] Expand **Spårbarhet**. Proposal id, trace id, code system and version,
-      LLM provider/model, prompt id with the first 12 characters of its hash,
-      embedding provider/model, the gate id/version/values, and both latencies.
-- [ ] Nothing wraps messily across the page; the full hash is copied on click
-      even though only 12 characters are shown.
+      LLM provider/model, prompt id and full sha256, embedding provider/model,
+      the gate id/version/values, and both latencies.
+- [ ] Long values wrap inside the terminal block, never across the page.
 
 ---
 

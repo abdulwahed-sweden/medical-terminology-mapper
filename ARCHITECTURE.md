@@ -388,9 +388,21 @@ the candidates live in a single table rather than the two duplicated lists the
 first version had.
 
 Four result states — suggestion, no good match, rerank failed, decision
-recorded — each carry their own heading, status label and coloured left edge, so
-they are not mistakable for one another. Built to WCAG 2.1 AA: every colour pair
-in the stylesheet is checked by a test, so contrast cannot regress unnoticed.
+recorded — each carry their own heading, a 2px frame and a tinted header strip
+in the state colour, so they are not mistakable for one another. Built to WCAG
+2.1 AA: every colour pair in the stylesheet is checked by a test, so contrast
+cannot regress unnoticed.
+
+The visual language follows an external design handoff (Al-Noor v1.1) with
+three deliberate departures, recorded in `docs/DESIGN-CHANGE-PLAN.md`. The
+important one: the design specified a **match percentage on every candidate**,
+but its figures were hand-authored constants with no formula, and a bold "96 %"
+beside a diagnosis code claims a certainty this pipeline cannot support — the
+same failure the retrieval gate exists to prevent. The slot is kept and filled
+with evidence that is real: source badges, the matched field, and score bars,
+with "—" for a stage that returned nothing. Four colours were also darkened to
+clear AA, and the candidate list stays a real `<table>` rather than the
+prototype's flex divs, because it is tabular data.
 
 ### An instrument, not a number
 

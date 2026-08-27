@@ -40,7 +40,7 @@ def test_page_renders(client: TestClient, icd10se_embedded: str) -> None:
 @pytest.mark.requires_db
 def test_static_assets_are_served(client: TestClient) -> None:
     for path, marker in (
-        ("/static/validator.css", "--c-accent"),
+        ("/static/validator.css", "--teal"),
         ("/static/validator.js", "function render"),
     ):
         response = client.get(path)
@@ -55,7 +55,7 @@ def test_test_mode_banner_is_shown_for_a_fake_provider(
     """The banner replaces the old grey footer note as how test mode is said."""
     body = client.get("/").text
     assert "Testläge" in body
-    assert "Ingen säkerhetsskattning visas" in body
+    assert "säkerhetsskattning" in body
 
 
 def test_test_mode_banner_is_absent_for_a_live_provider() -> None:
@@ -115,8 +115,9 @@ def test_each_result_state_renders_labelled(
 
 
 def test_each_state_has_a_distinct_card_modifier(markup: str) -> None:
+    """Four states, four visual signatures: 2px frame + tinted header strip."""
     css = CSS.read_text(encoding="utf-8")
-    for modifier in ("card--suggestion", "card--nomatch", "card--failed", "card--decided"):
+    for modifier in ("state--suggestion", "state--nomatch", "state--failed", "state--decided"):
         assert modifier in markup, modifier
         assert f".{modifier}" in css, modifier
 
@@ -132,6 +133,7 @@ def test_no_good_match_offers_only_the_two_valid_actions(markup: str) -> None:
 def test_decision_actions_come_before_the_evidence_table(markup: str) -> None:
     """The buttons must not sit below thirty rows of numbers."""
     assert markup.index('id="s-actions"') < markup.index('id="cand-rows"')
+    assert markup.index('id="state-suggestion"') < markup.index('id="evidence"')
 
 
 def test_there_is_exactly_one_candidate_table(markup: str) -> None:
@@ -146,7 +148,7 @@ def test_there_is_exactly_one_candidate_table(markup: str) -> None:
 def test_semantic_landmarks_and_table_structure(markup: str) -> None:
     for fragment in (
         "<main>",
-        "<header>",
+        "<header",
         "<footer",
         "<caption",
         'scope="col"',
@@ -154,6 +156,9 @@ def test_semantic_landmarks_and_table_structure(markup: str) -> None:
         "<summary",
         'aria-live="polite"',
         'class="skip-link"',
+        "<table",
+        "<tbody",
+        "<thead",
     ):
         assert fragment in markup, fragment
 
@@ -196,7 +201,7 @@ def test_stylesheet_uses_tokens_not_magic_colours() -> None:
     body = css[css.index("*, *::before") :]
     literals = re.findall(r"#[0-9a-fA-F]{3,8}\b", body)
     assert literals == [], f"hard-coded colours outside :root: {literals}"
-    assert root.count("--c-") >= 15
+    assert root.count("--") >= 40
 
 
 def test_reduced_motion_is_respected() -> None:
@@ -241,33 +246,49 @@ def _contrast(foreground: str, background: str) -> float:
 
 def _tokens() -> dict[str, str]:
     css = CSS.read_text(encoding="utf-8")
-    return dict(re.findall(r"(--c-[a-z0-9-]+):\s*(#[0-9a-fA-F]{6});", css))
+    return dict(re.findall(r"(--[a-z0-9-]+):\s*(#[0-9a-fA-F]{6});", css))
 
 
 # (foreground token, background token, minimum) -- WCAG 2.1 AA:
 # 1.4.3 text 4.5:1, 1.4.11 non-text UI 3:1.
 TEXT_PAIRS = [
-    ("--c-text", "--c-bg", 4.5),
-    ("--c-text-muted", "--c-bg", 4.5),
-    ("--c-text-muted", "--c-surface", 4.5),
-    ("--c-text", "--c-surface", 4.5),
-    ("--c-accent", "--c-bg", 4.5),
-    ("--c-accent", "--c-info-bg", 4.5),
-    ("--c-accent-text", "--c-accent", 4.5),
-    ("--c-ok", "--c-bg", 4.5),
-    ("--c-ok", "--c-ok-bg", 4.5),
-    ("--c-warn", "--c-bg", 4.5),
-    ("--c-warn", "--c-warn-bg", 4.5),
-    ("--c-error", "--c-bg", 4.5),
-    ("--c-error", "--c-error-bg", 4.5),
+    ("--ink-900", "--surface", 4.5),
+    ("--ink-700", "--surface", 4.5),
+    ("--ink-500", "--surface", 4.5),
+    ("--ink-500", "--field", 4.5),
+    ("--ink-500", "--canvas", 4.5),
+    # The design's ink-300 (#8FA09C) measured 2.74:1 and was darkened.
+    ("--ink-300", "--surface", 4.5),
+    ("--teal", "--surface", 4.5),
+    ("--surface", "--teal", 4.5),
+    ("--teal-pale", "--teal", 4.5),
+    ("--surface", "--teal-deep", 4.5),
+    ("--teal-pale", "--teal-deep", 4.5),
+    ("--blue", "--surface", 4.5),
+    ("--blue", "--teal-soft", 4.5),
+    ("--blue", "--blue-tint", 4.5),
+    ("--green", "--surface", 4.5),
+    ("--green", "--green-tint", 4.5),
+    ("--amber", "--surface", 4.5),
+    ("--amber-text", "--amber-bg", 4.5),
+    ("--red", "--surface", 4.5),
+    ("--surface", "--green", 4.5),
+    ("--surface", "--amber", 4.5),
+    ("--surface", "--red", 4.5),
+    ("--teal", "--teal-chip", 4.5),
+    ("--teal", "--teal-tint", 4.5),
 ]
 UI_PAIRS = [
-    ("--c-border", "--c-bg", 3.0),
-    ("--c-border-strong", "--c-bg", 3.0),
-    ("--c-accent", "--c-bg", 3.0),
-    ("--c-warn-border", "--c-warn-bg", 3.0),
-    ("--c-ok", "--c-bg", 3.0),
-    ("--c-error", "--c-bg", 3.0),
+    # The design's border (#C6C1B2) measured 1.80:1 and was darkened.
+    ("--border", "--surface", 3.0),
+    ("--teal", "--surface", 3.0),
+    ("--amber", "--surface", 3.0),
+    ("--green", "--surface", 3.0),
+    ("--red", "--surface", 3.0),
+    ("--amber-line", "--amber-bg", 3.0),
+    # The design's vector bar tint (#A9C2EC) measured 1.50:1 and was darkened.
+    ("--blue-bar", "--border-soft", 3.0),
+    ("--blue", "--border-soft", 3.0),
 ]
 
 
