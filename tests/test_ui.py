@@ -313,17 +313,53 @@ def test_hierarchy_breadcrumb_is_present(markup: str) -> None:
     assert "härledd" in JS.read_text(encoding="utf-8")
 
 
+def _workflow() -> dict:
+    yaml = pytest.importorskip("yaml")
+    workflow = ROOT / ".github" / "workflows" / "ci.yml"
+    return yaml.safe_load(workflow.read_text(encoding="utf-8"))
+
+
 def test_ci_workflow_is_valid_yaml() -> None:
     """An invalid workflow does not fail loudly -- it produces a run with zero
     jobs, which reads as a failure with no log. Worth one assertion."""
-    yaml = pytest.importorskip("yaml")
-
-    workflow = ROOT / ".github" / "workflows" / "ci.yml"
-    parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
-    steps = parsed["jobs"]["quality"]["steps"]
+    steps = _workflow()["jobs"]["quality"]["steps"]
     names = [step.get("name") for step in steps]
     for required in ("Lint", "Format", "Type-check", "Test"):
         assert required in names, required
-    # Python belongs in a file, not inline in a YAML block scalar.
-    for step in steps:
-        assert 'python -c "' not in (step.get("run") or ""), step.get("name")
+
+
+def test_no_workflow_step_inlines_multi_line_python() -> None:
+    """A multi-line `python -c` inside a YAML block scalar is the hazard.
+
+    Python's indentation and YAML's do not survive each other: an earlier
+    inline version broke the workflow badly enough to produce a run with zero
+    jobs and no log. A single-line `python -c "import app"` is a different
+    thing and stays allowed -- putting a one-line import check in its own file
+    would hide what it does.
+    """
+    for job in _workflow()["jobs"].values():
+        for step in job["steps"]:
+            run = step.get("run") or ""
+            if 'python -c "' not in run:
+                continue
+            fragment = run.split('python -c "', 1)[1]
+            assert '"' in fragment, step.get("name")
+            assert "\n" not in fragment.split('"', 1)[0], step.get("name")
+
+
+def test_ci_builds_the_image_and_exercises_the_mcp_entry_point() -> None:
+    """The image is part of the contract: the documented quick start runs it.
+
+    The project once shipped an image that never installed itself, so
+    `terminology-mcp` could not import `mcp_server` -- invisible to every unit
+    test, and only found by someone running the documented command.
+    """
+    steps = _workflow()["jobs"]["image"]["steps"]
+    runs = " ".join(step.get("run") or "" for step in steps)
+    assert "docker compose up -d --build" in runs
+    assert "alembic upgrade head" in runs
+    assert "scripts/load_terminology.py" in runs
+    assert "scripts/mcp_smoke.py" in runs
+    # Imported from outside the source tree, which is what proves it installed.
+    assert 'cd /tmp && python -c "import app, mcp_server"' in runs
+    assert "terminology-mcp --help" in runs
