@@ -102,6 +102,14 @@ class Settings(BaseSettings):
             "Measured plateau is 0.58-0.62; see ARCHITECTURE.md."
         ),
     )
+    gate_min_query_chars: int = Field(
+        default=3,
+        description=(
+            "Normalized queries shorter than this are blocked before any "
+            "evidence check. Three keeps real abbreviations such as AKS and "
+            "PTCA while stopping one- and two-character noise."
+        ),
+    )
     gate_vector_floors: dict[str, float] = Field(
         default_factory=dict,
         description=(

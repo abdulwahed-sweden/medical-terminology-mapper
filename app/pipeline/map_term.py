@@ -131,6 +131,8 @@ def map_term(
         settings=settings,
         embedding_provider_id=embedding_provider.provider_id,
         embedding_model_id=embedding_provider.model_id,
+        query=normalized.normalized,
+        tokens=normalized.tokens,
     )
     logger.info(
         "gate_evaluated",
