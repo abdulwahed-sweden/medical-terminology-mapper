@@ -87,7 +87,7 @@ $("map-form").addEventListener("submit", async (event) => {
   try {
     const response = await fetch("/map", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Client": "ui" },
       body: JSON.stringify({ text, target_system: system, version }),
     });
     const body = await response.json();

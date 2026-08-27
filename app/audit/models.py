@@ -76,6 +76,14 @@ class ProposalRow(Base):
     # model actually produced.
     provider_kind: Mapped[str] = mapped_column(String(8), nullable=False, default="live")
 
+    # Which surface filed this proposal: the validator page, a direct API
+    # caller, the MCP server, or an evaluation run. It says where a row came
+    # from, never who is accountable for it -- that is the decision row's job.
+    origin: Mapped[str] = mapped_column(String(16), nullable=False, default="api")
+    # Free text supplied by the caller (an agent's client name, say). It is
+    # explicitly NOT a validator identity and never appears on a decision.
+    requested_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
     # The retrieval gate. "The system found nothing" is a claim, and it has to
     # be checkable later in the same way the prompt hash makes reranking
     # checkable -- so the rule that ran, its version, its verdict, and the

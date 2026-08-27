@@ -161,6 +161,7 @@ def main(argv: list[str] | None = None) -> int:
                 embedding_provider=embeddings,
                 llm_provider=llm,
                 prompt=prompt,
+                origin="eval",
             )
             proposal = outcome.proposal
             ranked = [entry["code"] for entry in (proposal.rerank or {}).get("ranked", [])]

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 
 from app.api.deps import EmbeddingDep, LLMDep, PromptDep, SessionDep, SettingsDep
 from app.api.serializers import serialize_proposal
@@ -27,6 +27,7 @@ router = APIRouter(tags=["mapping"])
 )
 def create_mapping_proposal(
     payload: MapRequest,
+    request: Request,
     session: SessionDep,
     settings: SettingsDep,
     embeddings: EmbeddingDep,
@@ -44,6 +45,10 @@ def create_mapping_proposal(
             embedding_provider=embeddings,
             llm_provider=llm,
             prompt=prompt,
+            # The validator page sends X-Client: ui. Anything else reaching
+            # this route is a direct API caller. The MCP server does not come
+            # through here at all -- it calls map_term in process.
+            origin="ui" if request.headers.get("X-Client") == "ui" else "api",
         )
     except TerminologyLicenceRequired as exc:
         # Not implemented rather than bad request: the client asked for
