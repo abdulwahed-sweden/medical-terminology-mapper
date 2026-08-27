@@ -362,6 +362,47 @@ every way of recording an incoherent one is closed:
 - A second decision is refused, with a unique constraint as the last line of
   defence against a race.
 
+### Writes commit before the response is built
+
+FastAPI runs a `yield` dependency's teardown *after* the response has gone out.
+With the commit living there, a client that posted a decision immediately after
+mapping could arrive before the proposal was durable and be told it did not
+exist -- measured at roughly one immediate follow-up in five, and exactly the
+kind of failure that looks like a mystery to a user clicking Accept quickly.
+
+The write routes therefore commit explicitly before serialising a response;
+`session_scope` keeps its commit as a safety net for anything else. Tests bind
+their session with `join_transaction_mode="create_savepoint"`, so an inner
+commit releases a savepoint and the outer transaction the fixture owns is still
+rolled back.
+
+### The version string is the publisher's release year
+
+`"2026"`, as an opaque string. Not a date, not a semantic version, not the
+validity date the files also carry (`2026-01-01`). The publisher names a release
+by its year and ships one a year, so the year is the shortest thing that
+identifies it unambiguously. It is opaque: nothing parses, compares or orders
+it, so a publisher who changes the convention breaks nothing here.
+
+Sample fixtures use `"2026-sample"` so a sample can never be mistaken for the
+release in a stored proposal.
+
+### U-codes are placeholders, and are not loaded by default
+
+The publisher distributes 63 U-codes in a separate file: reserved slots that let
+a new code be put into use at short notice, as happened with covid-19. They are
+real, well-formed codes -- not headings -- but until one is put into use it
+stands for nothing.
+
+So `scripts/load_terminology.py` excludes them unless `--include-u-codes` is
+passed, and when loaded they are stored with `placeholder = true` and excluded
+from retrieval exactly as headings are. They differ from headings in what
+happens next: a heading is refused as a decision outright, because a group is
+never a mapping, whereas a human may deliberately record a U-code. The first
+attempt is therefore refused with an explanation, and a repeat carrying
+`acknowledge_placeholder` succeeds -- a warning with a confirmation, not a
+prohibition.
+
 ### Versions are first-class
 
 Every concept row is keyed by `(system, version, code)`; several versions
@@ -449,15 +490,28 @@ fixed in different places.
    mapping, no combination rules (dagger/asterisk pairs, mandatory additional
    codes). The classification files carry that information; Phase 1 does not
    act on it.
-9. **The gate's fuzzy threshold rests on thin evidence.** 29 negatives and 30
+9. **Retrieval index usage is not asserted at release size.** An earlier
+   measurement recorded the trigram predicate running as a sequential scan
+   (145 ms over 11 888 concepts). It no longer reproduces: the full query now
+   plans as a `BitmapOr` across the trigram and tsvector indexes, and
+   end-to-end retrieval on the real KVÅ release measures 10–19 ms rather than
+   the 199–267 ms recorded before. Several things changed in between — bulk
+   loads now `ANALYZE`, the non-indexable `code NOT LIKE '%-%'` filter became
+   an indexed boolean, and two indexes were added — and a controlled test
+   showed the plan stays index-served even with statistics on `search_text`
+   disabled, so no single cause is established. Two tests assert the *form*
+   of both predicates stays index-servable, which is what would silently
+   regress; nothing asserts the planner's choice at release size, because the
+   committed fixtures are 27 and 19 concepts.
+10. **The gate's fuzzy threshold rests on thin evidence.** 29 negatives and 30
    misspellings on one terminology, with the nearest negative 0.029 below the
    threshold, and the two classes overlapping on that signal alone. It is
    versioned and recorded per proposal so it can be re-measured; it should be,
    against ICD-10-SE and against real mistyped input.
-10. **The gate cannot judge relevance**, only whether evidence exists. Common
+11. **The gate cannot judge relevance**, only whether evidence exists. Common
     Swedish words that occur in the terminology pass it. That is the reranker's
     job, and with the stand-in there is no reranker worth the name.
-11. **No automated browser tests.** Playwright ships no Chromium for the
+12. **No automated browser tests.** Playwright ships no Chromium for the
     development machine's OS. Page structure, semantics and contrast are tested
     server-side; interaction is a manual checklist
     (`docs/MANUAL_UI_TEST.md`).

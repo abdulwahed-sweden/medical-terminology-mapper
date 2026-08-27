@@ -1,6 +1,6 @@
 # Phase 1 build report
 
-**Built:** 2026-08-26 · **Branch:** `phase-1-build` · **Tests:** 282 passed, 2 skipped
+**Built:** 2026-08-26 · **Closed:** 2026-08-27 · **Tests:** 338 passed, 2 skipped
 
 > **Post-Phase-1 follow-up (2026-08-26):** both loaders now read `.xlsx` as well
 > as `.tsv`, and the KVÅ loader has been **verified against the real published
@@ -572,3 +572,65 @@ reply that accompanied this work.
     the GIN index supports `<<%` but the planner does not choose it, and
     `ANALYZE` does not change that. Untouched here — but it will matter at
     ICD-10-SE's scale.
+
+
+---
+
+## 9. Close-out (2026-08-27)
+
+The last Phase 1 pull request, before Phase 2 begins. It closes the model so the
+MCP server can be built against something settled rather than redone afterwards.
+
+### What it resolved, by open-question number
+
+| # | Question | Outcome |
+| --- | --- | --- |
+| **2** | Version string convention | **Resolved.** The publisher's release year as an opaque string (`"2026"`). Documented in ARCHITECTURE.md. |
+| **3** | U-codes | **Resolved.** Not loaded by default; `--include-u-codes` loads them as `placeholder = true`, excluded from retrieval, recordable by a human only with an explicit acknowledgement. |
+| **5** | `Ej huvuddiagnos` | **Resolved.** Parsed, stored, shown to the reranker, exposed on the API and badged on the page. It informs and never blocks a decision — the validator may be coding a secondary diagnosis. |
+| **9** | Evaluation writing to the audit tables | **Resolved.** Kept, because an evaluated row is a real mapping attempt. `--dry-run` added for large gold sets. |
+| **14** | Short queries and stopwords | **Resolved.** Gate v2 blocks an all-stopword query and one shorter than three characters, before any evidence check. |
+| **15** | Trigram sequential scan | **Documented, not fixed.** It no longer reproduces; the cause is not established. See below. |
+| **1** | A real ICD-10-SE code-text file | **Still open.** Needs the file. |
+| **13** | Re-measure the gate against ICD-10-SE | **Still open.** Blocked on question 1. |
+
+Two new questions from Part 1 are also closed by it: KVÅ had no hierarchy, and
+headings were rejected rather than loaded.
+
+### Hierarchy
+
+KVÅ states its hierarchy in the code itself — KKÅ follows NCSP
+(`F → FN → FNG → FNG02`), KMÅ is a two-letter chapter plus three digits — so the
+structure is read back out and recorded as `parent_source = "derived"`. A
+publisher-stated parent always wins. Headings load as concepts with
+`assignable = false` and are filtered in SQL in both retrieval stages, so they
+never consume a top-K slot.
+
+On the real KVÅ 2026 release: **11 888 rows = 11 886 assignable + 2 headings**
+(`EMA`, `FAA`). Worth noting against the brief, which expected 11 888 assignable:
+the publisher's own "Antal 5 ställiga koder: 11 888" counts every row, and two of
+them are three-letter group headings rather than five-position codes. Every
+concept now carries a chapter, where none did before.
+
+Gold set unchanged (12/12 Top-1, 12/12 candidate recall). PTCA queries unchanged
+(#1, #1, #4, not found).
+
+### Trigram scan
+
+The 145 ms sequential scan does not reproduce. The full query plans as a
+`BitmapOr` across both indexes, and end-to-end retrieval on the real release
+measures **10–19 ms** against the **199–267 ms** recorded earlier. No single
+cause is established: three things changed in between, and a controlled test
+with statistics on `search_text` disabled still produced an index plan. Rather
+than pick a story, the finding is recorded in ARCHITECTURE.md → Known
+limitations, and two tests now assert that both predicates stay *index-servable*
+— which is the thing that would silently regress.
+
+### Still open
+
+1. **A real machine-readable ICD-10-SE release.** The loader remains
+   `FORMAT_UNVERIFIED` for ICD-10-SE, and every negative measurement behind the
+   gate threshold comes from KVÅ alone.
+13. **Re-measure the gate against ICD-10-SE**, which is blocked on the same file.
+
+Both need the file from the author; neither is something the code can settle.

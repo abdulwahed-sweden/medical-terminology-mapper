@@ -80,7 +80,15 @@ def connection(engine: Engine) -> Iterator[Connection]:
 
 @pytest.fixture
 def db_session(connection: Connection) -> Iterator[Session]:
-    maker = sessionmaker(bind=connection, expire_on_commit=False, future=True)
+    # `create_savepoint` keeps test isolation now that the write routes commit
+    # explicitly: the session's commit releases a SAVEPOINT, and the outer
+    # transaction this fixture owns is still rolled back at teardown.
+    maker = sessionmaker(
+        bind=connection,
+        expire_on_commit=False,
+        future=True,
+        join_transaction_mode="create_savepoint",
+    )
     session = maker()
     try:
         yield session
@@ -188,3 +196,37 @@ def client(db_session: Session) -> Iterator[TestClient]:  # noqa: F821
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def kva_embedded(db_session: Session, kva_loaded: str) -> str:
+    """Embed the loaded KVÅ sample with the deterministic fake provider."""
+    import sqlalchemy as sa
+
+    from app.config import get_settings
+    from app.db.models import ConceptEmbeddingRow, ConceptRow
+    from app.embeddings.fake import FakeEmbeddingProvider
+
+    provider = FakeEmbeddingProvider(dim=get_settings().embedding_dim)
+    rows = db_session.execute(
+        sa.select(ConceptRow.code, ConceptRow.search_text)
+        .where(ConceptRow.system == "kva", ConceptRow.version == kva_loaded)
+        .order_by(ConceptRow.code)
+    ).all()
+    vectors = provider.embed([r.search_text for r in rows])
+    db_session.add_all(
+        [
+            ConceptEmbeddingRow(
+                system="kva",
+                version=kva_loaded,
+                code=row.code,
+                provider=provider.provider_id,
+                model=provider.model_id,
+                dim=provider.dim,
+                embedding=vector,
+            )
+            for row, vector in zip(rows, vectors, strict=True)
+        ]
+    )
+    db_session.flush()
+    return kva_loaded

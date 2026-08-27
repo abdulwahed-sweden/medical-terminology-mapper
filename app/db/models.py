@@ -50,6 +50,16 @@ class ConceptRow(Base):
     parent_code: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_leaf: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     chapter: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # "column" = the publisher stated this parent; "derived" = it was read from
+    # the code's own prefix structure. Never conflate the two.
+    parent_source: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Headings (chapter/section/group rows) are loaded for the hierarchy and
+    # excluded from retrieval and decisions.
+    assignable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # A reserved U-code slot: real, but standing for nothing yet.
+    placeholder: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # The publisher's "Ej huvuddiagnos" marker.
+    not_primary_diagnosis: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     # Denormalised "preferred term + synonyms", the target for trigram
     # similarity. Kept as a plain column so the loader controls exactly what is
@@ -136,6 +146,10 @@ def upsert_concepts(session: Session, concepts: Iterable[Concept]) -> int:
                 parent_code=c.parent_code,
                 is_leaf=c.is_leaf,
                 chapter=c.chapter,
+                parent_source=c.parent_source,
+                assignable=c.assignable,
+                not_primary_diagnosis=c.not_primary_diagnosis,
+                placeholder=c.placeholder,
                 search_text=build_search_text(c),
                 synonym_text=build_synonym_text(c),
                 description_text=c.description,
@@ -158,3 +172,53 @@ def loaded_versions(session: Session) -> list[tuple[str, str, int]]:
         .order_by(ConceptRow.system, ConceptRow.version)
     ).all()
     return [(system, version, count) for system, version, count in rows]
+
+
+def hierarchy_for(
+    session: Session, *, system: str, version: str, code: str
+) -> list[dict[str, str | None]]:
+    """The ancestor chain of a code, outermost first, with titles where known.
+
+    Two sources of truth, in order. A publisher-stated `parent_code` is walked
+    first. When the walk runs out -- which it does for KVA, whose workbook
+    carries codes but not their ancestors -- the rest of the chain is read from
+    the code's own prefix structure. Ancestors with no row in this release are
+    still returned, with a null title, because the chain is real even where the
+    file does not spell it out.
+    """
+    from app.terminology.kva import ancestors as kva_ancestors
+
+    chain: list[str] = []
+    seen: set[str] = {code}
+    current = code
+    for _ in range(8):
+        parent = session.execute(
+            sa.select(ConceptRow.parent_code).where(
+                ConceptRow.system == system,
+                ConceptRow.version == version,
+                ConceptRow.code == current,
+            )
+        ).scalar_one_or_none()
+        if not parent or parent in seen:
+            break
+        chain.append(parent)
+        seen.add(parent)
+        current = parent
+
+    if system == "kva":
+        structural = [c for c in kva_ancestors(code) if c not in seen]
+        chain.extend(structural)
+
+    ordered = list(reversed(chain)) if system != "kva" else sorted(set(chain), key=len)
+    if not ordered:
+        return []
+
+    rows = session.execute(
+        sa.select(ConceptRow.code, ConceptRow.preferred_term).where(
+            ConceptRow.system == system,
+            ConceptRow.version == version,
+            ConceptRow.code.in_(ordered),
+        )
+    ).all()
+    titles: dict[str, str] = {row.code: row.preferred_term for row in rows}
+    return [{"code": c, "title": titles.get(c)} for c in ordered]

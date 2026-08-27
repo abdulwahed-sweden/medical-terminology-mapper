@@ -15,6 +15,7 @@ from app.validation.decisions import (
     DecisionConflict,
     DecisionNotApplicable,
     InvalidDecision,
+    PlaceholderCodeNotAcknowledged,
     ProposalNotFound,
     record_decision,
 )
@@ -58,6 +59,7 @@ def create_decision(payload: DecisionRequest, session: SessionDep) -> ProposalOu
             final_code=payload.final_code,
             validator_note=payload.validator_note,
             validator_id=payload.validator_id,
+            acknowledge_placeholder=payload.acknowledge_placeholder,
         )
     except ProposalNotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -65,6 +67,8 @@ def create_decision(payload: DecisionRequest, session: SessionDep) -> ProposalOu
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except DecisionNotApplicable as exc:
         raise HTTPException(status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except PlaceholderCodeNotAcknowledged as exc:
+        raise HTTPException(HTTP_422_UNPROCESSABLE, detail=str(exc)) from exc
     except InvalidDecision as exc:
         raise HTTPException(HTTP_422_UNPROCESSABLE, detail=str(exc)) from exc
     except IntegrityError as exc:
@@ -75,6 +79,9 @@ def create_decision(payload: DecisionRequest, session: SessionDep) -> ProposalOu
             status.HTTP_409_CONFLICT,
             detail=f"proposal {payload.proposal_id} has already been decided",
         ) from exc
+
+    # Durable before the response goes out -- see the note in routes_map.
+    session.commit()
 
     proposal = get_proposal(session, payload.proposal_id)
     assert proposal is not None  # record_decision would have raised

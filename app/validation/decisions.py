@@ -55,6 +55,15 @@ class InvalidDecision(ValueError):
     """The decision is internally inconsistent or names an unusable code."""
 
 
+class PlaceholderCodeNotAcknowledged(ValueError):
+    """The code is a reserved U-code placeholder.
+
+    Not a refusal: a human may deliberately record one. The caller repeats the
+    request with `acknowledge_placeholder`, which is what the page's confirm
+    step does.
+    """
+
+
 class DecisionNotApplicable(RuntimeError):
     """This kind of decision cannot apply to this proposal at all.
 
@@ -72,6 +81,7 @@ def record_decision(
     final_code: str | None = None,
     validator_note: str | None = None,
     validator_id: str,
+    acknowledge_placeholder: bool = False,
 ) -> DecisionRow:
     proposal = get_proposal(session, proposal_id)
     if proposal is None:
@@ -90,7 +100,13 @@ def record_decision(
             f"map the term again to record a new opinion"
         )
 
-    resolved_code = _resolve_final_code(session, proposal, decision, final_code)
+    resolved_code = _resolve_final_code(
+        session,
+        proposal,
+        decision,
+        final_code,
+        acknowledge_placeholder=acknowledge_placeholder,
+    )
 
     row = insert_decision(
         session,
@@ -108,6 +124,8 @@ def _resolve_final_code(
     proposal: ProposalRow,
     decision: DecisionKind,
     final_code: str | None,
+    *,
+    acknowledge_placeholder: bool = False,
 ) -> str | None:
     if decision == "reject":
         # Rejecting means "none of this is right". Any code supplied alongside
@@ -134,46 +152,61 @@ def _resolve_final_code(
     # correct
     if not final_code or not final_code.strip():
         raise InvalidDecision("a correction must supply the correct code")
-    return _validate_code(session, proposal, final_code.strip().upper())
+    return _validate_code(
+        session,
+        proposal,
+        final_code.strip().upper(),
+        acknowledge_placeholder=acknowledge_placeholder,
+    )
 
 
-def _validate_code(session: Session, proposal: ProposalRow, code: str) -> str:
+def _validate_code(
+    session: Session,
+    proposal: ProposalRow,
+    code: str,
+    *,
+    acknowledge_placeholder: bool = False,
+) -> str:
     system = proposal.target_system
     validator = VALIDATORS.get(system)
     if validator is None:  # pragma: no cover - target_system is constrained upstream
         raise InvalidDecision(f"unknown target system {system!r}")
 
-    # Looked up first, because "exists but is not assignable" and "does not
-    # exist" need different messages, and only one of them means the user made
-    # a typo.
-    exists = session.execute(
-        sa.select(sa.func.count())
-        .select_from(ConceptRow)
-        .where(
+    # The concept row is the authority on whether a code is codable. Before
+    # `assignable` was stored this was inferred from "exists but fails the
+    # format check", which happened to be right for code intervals and would
+    # have been wrong for anything subtler.
+    row = session.execute(
+        sa.select(ConceptRow.assignable, ConceptRow.placeholder).where(
             ConceptRow.system == system,
             ConceptRow.version == proposal.terminology_version,
             ConceptRow.code == code,
         )
-    ).scalar_one()
+    ).one_or_none()
 
-    if not validator.validate_code_format(code):
-        if exists:
-            # A chapter, section or group heading -- "I10-I15", "EMA". The user
-            # found something real and picked the group instead of a code inside
-            # it; saying so is far more useful than "invalid format".
-            raise InvalidDecision(
-                f"koden {code} är en rubrik i {system} "
-                f"{proposal.terminology_version}, inte en tilldelningsbar kod"
-            )
-        raise InvalidDecision(f"koden {code} har inte giltigt format för {system}")
-
-    # Beyond format: the code must actually exist in the version this proposal
-    # was computed against. A well-formed code that is not in the release would
-    # still be an invalid mapping, and this is the last point at which anything
-    # can catch it.
-    if not exists:
+    if row is None:
+        if not validator.validate_code_format(code):
+            raise InvalidDecision(f"koden {code} har inte giltigt format för {system}")
         raise InvalidDecision(
             f"koden {code} har giltigt format men finns inte i "
             f"{system} version {proposal.terminology_version}"
         )
+
+    if row.placeholder and not acknowledge_placeholder:
+        # A reserved U-code slot. It is a real code and a human may deliberately
+        # record it, so this is not a refusal -- it is a warning that has to be
+        # acknowledged, which is what the page's confirm step does.
+        raise PlaceholderCodeNotAcknowledged(
+            f"koden {code} är en platshållarkod (U-kod) och föreslås inte"
+        )
+
+    if not row.assignable:
+        # A chapter, section or group heading. The user found something real and
+        # picked the group instead of a code inside it; saying so is far more
+        # useful than "invalid format".
+        raise InvalidDecision(
+            f"koden {code} är en rubrik i {system} "
+            f"{proposal.terminology_version}, inte en tilldelningsbar kod"
+        )
+
     return code

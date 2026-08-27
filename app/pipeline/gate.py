@@ -37,9 +37,10 @@ The one misspelling this rejects is `adenoisntest` (two transpositions in one
 word). The nearest negative sits 0.029 below the threshold, which is not much
 room -- recorded as a known fragility in ARCHITECTURE.md.
 
-A query of ordinary Swedish words that genuinely occur in the terminology
-("patient", "behandling") passes the gate, correctly: there *is* lexical
-evidence. Judging whether that evidence means anything is the reranker's job,
+A query of ordinary Swedish *content* words that genuinely occur in the
+terminology ("patient", "behandling") passes the gate, correctly: there *is*
+lexical evidence. A query of nothing but function words does not -- see the
+stopword check. Judging whether that evidence means anything is the reranker's job,
 and its own `no_good_match` flag is the second, independent signal.
 """
 
@@ -51,9 +52,10 @@ from typing import Any
 
 from app.config import Settings
 from app.models.candidate import Candidate
+from app.normalize.stopwords_sv import SWEDISH_STOPWORDS
 
 GATE_ID = "lexical_evidence"
-GATE_VERSION = "1"
+GATE_VERSION = "2"
 
 
 @dataclass(frozen=True)
@@ -75,8 +77,17 @@ def evaluate_gate(
     settings: Settings,
     embedding_provider_id: str,
     embedding_model_id: str,
+    query: str = "",
+    tokens: Sequence[str] = (),
 ) -> GateOutcome:
-    """Decide whether the candidate set carries enough evidence to rerank."""
+    """Decide whether the candidate set carries enough evidence to rerank.
+
+    Two checks run before any evidence is looked at, because for these queries
+    the evidence is misleading rather than weak. `och` reaches
+    strict_word_similarity 1.000 against the whole terminology -- it occurs in
+    thousands of titles -- so it would sail through the evidence rule and the
+    stand-in reranker would produce a suggestion for a conjunction.
+    """
     vector_space = f"{embedding_provider_id}/{embedding_model_id}"
     vector_floor = settings.gate_vector_floors.get(vector_space)
 
@@ -98,7 +109,24 @@ def evaluate_gate(
         "vector_floor": vector_floor,
         "min_ts_rank": settings.gate_min_ts_rank,
         "min_strict_similarity": settings.gate_min_strict_similarity,
+        "query_chars": len(query.strip()),
+        "query_token_count": len(tokens),
+        "stopword_token_count": sum(1 for t in tokens if t in SWEDISH_STOPWORDS),
+        "min_query_chars": settings.gate_min_query_chars,
     }
+
+    # Stopwords before length: "av" is both, and "it is a function word" says
+    # more about why it was blocked than "it is short".
+    if tokens and all(token in SWEDISH_STOPWORDS for token in tokens):
+        return GateOutcome(True, "frågan består bara av stoppord", values)
+
+    if len(query.strip()) < settings.gate_min_query_chars:
+        return GateOutcome(
+            True,
+            f"frågan är för kort ({len(query.strip())} tecken, minst "
+            f"{settings.gate_min_query_chars} krävs)",
+            values,
+        )
 
     if not candidates:
         return GateOutcome(True, "inga kandidater återfanns", values)

@@ -62,6 +62,7 @@ _SQL = """
         c.synonyms,
         c.chapter,
         c.is_leaf,
+        c.not_primary_diagnosis,
         ts_rank_cd('{weights}'::float4[], c.search_vector, q.tsq, :norm)       AS ts_rank,
         ts_rank_cd('{{0,0,0,1}}'::float4[], c.search_vector, q.tsq, :norm)     AS ts_title,
         ts_rank_cd('{{0,0,1,0}}'::float4[], c.search_vector, q.tsq, :norm)     AS ts_synonym,
@@ -72,8 +73,10 @@ _SQL = """
     FROM concepts c, q
     WHERE c.system = :system
       AND c.version = :version
-      -- A code interval ("I10-I15") names a group, not an assignable code.
-      AND c.code NOT LIKE '%-%'
+      -- Headings name a group, not a codable concept. Filtered here rather
+      -- than after the fact, so they never consume a top-K slot.
+      AND c.assignable
+      AND NOT c.placeholder
       AND (
             ({match_condition})
             -- `<<%` honours pg_trgm.strict_word_similarity_threshold, set below.
@@ -165,6 +168,7 @@ def lexical_search(
                 synonyms=list(row.synonyms or []),
                 chapter=row.chapter,
                 is_leaf=row.is_leaf,
+                not_primary_diagnosis=row.not_primary_diagnosis,
                 sources=["lexical"],
                 lexical_score=max(ts_rank, trgm),
                 lexical_rank=rank,

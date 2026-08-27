@@ -46,11 +46,15 @@ def _cand(
 
 
 def _gate(candidates: list[Candidate], settings: Settings | None = None):  # type: ignore[no-untyped-def]
+    """Evidence-rule tests supply a normal clinical query, so the stopword and
+    length guards ahead of it never interfere."""
     return evaluate_gate(
         candidates,
         settings=settings or SETTINGS,
         embedding_provider_id="fake",
         embedding_model_id="fake-hash-v1",
+        query="högt blodtryck",
+        tokens=["högt", "blodtryck"],
     )
 
 
@@ -215,3 +219,101 @@ def test_the_gate_is_recorded_on_successful_proposals_too(
     assert proposal.gate_fired is False
     assert proposal.gate_values["best_strict_similarity"] > 0
     assert "reason" in proposal.gate_values
+
+
+# ------------------------------------------------- stopword and length guard
+
+
+def _gate_q(query: str, tokens: list[str], settings: Settings | None = None):  # type: ignore[no-untyped-def]
+    """Gate a query with a candidate that would otherwise pass on evidence."""
+    strong = _cand(ts_rank=0.5, strict=1.0)
+    return evaluate_gate(
+        [strong],
+        settings=settings or SETTINGS,
+        embedding_provider_id="fake",
+        embedding_model_id="fake-hash-v1",
+        query=query,
+        tokens=tokens,
+    )
+
+
+@pytest.mark.parametrize(
+    ("query", "tokens"),
+    [("och", ["och"]), ("av", ["av"]), ("och av den", ["och", "av", "den"])],
+)
+def test_a_query_of_only_stopwords_is_blocked(query: str, tokens: list[str]) -> None:
+    """`och` reaches strict_word_similarity 1.000 against the whole terminology
+    -- it occurs in thousands of titles -- so the evidence rule alone would let
+    it through and the stand-in would suggest a code for a conjunction."""
+    outcome = _gate_q(query, tokens)
+    assert outcome.fired is True
+    assert outcome.reason == "frågan består bara av stoppord"
+    assert outcome.values["stopword_token_count"] == len(tokens)
+    assert outcome.values["query_token_count"] == len(tokens)
+
+
+def test_a_too_short_query_is_blocked() -> None:
+    outcome = _gate_q("ab", ["ab"])
+    assert outcome.fired is True
+    assert "för kort" in outcome.reason
+    assert outcome.values["query_chars"] == 2
+    assert outcome.values["stopword_token_count"] == 0
+
+
+def test_a_real_three_letter_abbreviation_is_not_blocked_by_the_guard() -> None:
+    """AKS (akut koronart syndrom) is a real abbreviation. It may still fail on
+    evidence, but it must not be stopped by the length or stopword rule."""
+    outcome = _gate_q("aks", ["aks"])
+    assert outcome.admitted
+    assert "stoppord" not in outcome.reason
+    assert "för kort" not in outcome.reason
+
+
+def test_a_clinical_phrase_is_unaffected() -> None:
+    outcome = _gate_q("högt blodtryck", ["högt", "blodtryck"])
+    assert outcome.admitted
+    assert outcome.values["stopword_token_count"] == 0
+
+
+def test_a_phrase_mixing_content_and_stopwords_passes() -> None:
+    """ "hypertensiv hjärtsjukdom utan hjärtsvikt" contains a stopword; only an
+    all-stopword query is blocked."""
+    outcome = _gate_q(
+        "hypertensiv hjärtsjukdom utan hjärtsvikt",
+        ["hypertensiv", "hjärtsjukdom", "utan", "hjärtsvikt"],
+    )
+    assert outcome.admitted
+    assert outcome.values["stopword_token_count"] == 1
+
+
+def test_the_minimum_length_is_configurable() -> None:
+    lenient = SETTINGS.model_copy(update={"gate_min_query_chars": 2})
+    assert _gate_q("ab", ["ab"], lenient).admitted
+
+
+def test_gate_version_is_two() -> None:
+    """Existing proposals keep v1; the UI shows the version in Spårbarhet."""
+    assert GATE_VERSION == "2"
+
+
+def test_no_clinical_word_is_in_the_stopword_list() -> None:
+    """A false entry here silently blocks a real query."""
+    from app.normalize.stopwords_sv import SWEDISH_STOPWORDS
+
+    for word in (
+        "akut",
+        "kronisk",
+        "svår",
+        "höger",
+        "vänster",
+        "övre",
+        "nedre",
+        "hjärta",
+        "blod",
+        "astma",
+        "infarkt",
+        "hypertoni",
+        "smärta",
+        "feber",
+    ):
+        assert word not in SWEDISH_STOPWORDS, word

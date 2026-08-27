@@ -132,6 +132,8 @@
             <div class="hero__text">
               <p class="hero__term" id="s-term"></p>
               <p class="hero__reason" id="s-reason"></p>
+              <p class="crumbs hidden" id="s-hierarchy"></p>
+              <p class="hero__meta hidden" id="s-notprimary"></p>
               <p class="hero__meta" id="s-confidence"></p>
             </div>
           </div>
@@ -243,8 +245,10 @@
           <h2 class="card__title" id="kand-rubrik">Kandidater och underlag</h2>
           <span class="card__meta" id="table-legend">— betyder att kandidaten inte återfanns av det steget</span>
         </div>
-        <p class="legend visually-hidden" id="legend-a11y">
+        <p class="legend" id="legend-a11y">
           Blå kantlinje och större text markerar bästa träffen.
+          <b>Ej huvuddiagnos</b> betyder att kodverket anger att koden inte får
+          användas som huvuddiagnos — den kan fortfarande vara rätt som bidiagnos.
         </p>
         <div class="table-wrap">
           <table aria-describedby="table-legend legend-a11y">

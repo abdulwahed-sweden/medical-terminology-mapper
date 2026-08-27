@@ -8,13 +8,16 @@ from __future__ import annotations
 
 from typing import Any
 
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.audit.models import DecisionRow, ProposalRow
 from app.audit.writer import get_decision_for
+from app.db.models import ConceptRow, hierarchy_for
 from app.models.api import (
     DecisionOut,
     GateOut,
+    HierarchyNode,
     ProposalOut,
     RankedCodeOut,
     ValidatedMapping,
@@ -51,6 +54,30 @@ def serialize_proposal(session: Session, proposal: ProposalRow) -> ProposalOut:
         for entry in rerank.get("ranked", [])
     ]
 
+    hierarchy: list[HierarchyNode] = []
+    parent_source: str | None = None
+    not_primary = any(
+        c.get("not_primary_diagnosis") and c.get("code") == proposal.suggested_code
+        for c in proposal.candidates
+    )
+    if proposal.suggested_code:
+        hierarchy = [
+            HierarchyNode(code=node["code"], title=node["title"])
+            for node in hierarchy_for(
+                session,
+                system=proposal.target_system,
+                version=proposal.terminology_version,
+                code=proposal.suggested_code,
+            )
+        ]
+        parent_source = session.execute(
+            sa.select(ConceptRow.parent_source).where(
+                ConceptRow.system == proposal.target_system,
+                ConceptRow.version == proposal.terminology_version,
+                ConceptRow.code == proposal.suggested_code,
+            )
+        ).scalar_one_or_none()
+
     decision_row = get_decision_for(session, proposal.id)
     decision = serialize_decision(decision_row) if decision_row else None
 
@@ -82,6 +109,9 @@ def serialize_proposal(session: Session, proposal: ProposalRow) -> ProposalOut:
         ),
         suggested_code=proposal.suggested_code,
         suggested_term=terms.get(proposal.suggested_code or ""),
+        suggested_hierarchy=hierarchy,
+        suggested_not_primary_diagnosis=not_primary,
+        suggested_parent_source=parent_source,
         model_confidence=None if is_fake else proposal.model_confidence,
         no_good_match=proposal.status == "no_good_match",
         notes=rerank.get("notes"),

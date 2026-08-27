@@ -223,6 +223,10 @@ def build_rerank_input(
                 "code": candidate.code,
                 "preferred_term": candidate.preferred_term,
                 "synonyms": candidate.synonyms[:MAX_SYNONYMS_SHOWN],
+                # The prompt already tells the model the candidates carry
+                # fields; this one says the publisher forbids the code as a
+                # primary diagnosis. No prompt revision is needed to surface it.
+                "not_primary_diagnosis": candidate.not_primary_diagnosis,
                 "retrieval": {
                     "sources": candidate.sources,
                     "lexical_score": candidate.lexical_score,

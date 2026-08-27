@@ -28,6 +28,8 @@ class Candidate(BaseModel):
     synonyms: list[str] = Field(default_factory=list)
     chapter: str | None = None
     is_leaf: bool = True
+    # The publisher marks this code as unusable for a primary diagnosis.
+    not_primary_diagnosis: bool = False
 
     # Which stages produced this candidate. Order is stable: lexical, vector.
     sources: list[RetrievalSource] = Field(default_factory=list)

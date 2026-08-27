@@ -132,6 +132,13 @@ function renderSuggestion(p) {
   $("s-term").textContent = p.suggested_term || "";
   const top = (p.ranked || [])[0];
   $("s-reason").textContent = top ? top.reason : "";
+  renderHierarchy(p);
+  const notPrimary = p.suggested_not_primary_diagnosis;
+  $("s-notprimary").innerHTML = notPrimary
+    ? '<span class="tag tag--notprimary">Ej huvuddiagnos</span> ' +
+      "Kodverket anger att koden inte får användas som huvuddiagnos."
+    : "";
+  show($("s-notprimary"), Boolean(notPrimary));
 
   if (p.provider_kind === "fake") {
     $("s-confidence").innerHTML =
@@ -145,6 +152,28 @@ function renderSuggestion(p) {
   }
   show($("state-suggestion"), true);
   focusState($("state-suggestion"));
+}
+
+/* The chain above the suggested code. Ancestors the release does not carry as
+ * rows still appear -- the chain is real even where the file omits it -- but
+ * without a title, and the whole line is marked when it was read from the
+ * code's structure rather than stated by the publisher. */
+function renderHierarchy(p) {
+  const nodes = p.suggested_hierarchy || [];
+  const box = $("s-hierarchy");
+  if (!nodes.length) { show(box, false); return; }
+
+  const parts = nodes.map((n) => {
+    const cls = n.title ? "crumbs__code" : "crumbs__code crumbs__code--plain";
+    const title = n.title ? ` title="${esc(n.title)}"` : "";
+    return `<span class="${cls}"${title}>${esc(n.code)}</span>`;
+  });
+  const derived = p.suggested_parent_source === "derived"
+    ? ' <span class="crumbs__derived">(härledd)</span>' : "";
+  box.innerHTML =
+    `<span class="crumbs__label">Hierarki</span>` +
+    parts.join('<span class="crumbs__sep" aria-hidden="true">›</span>') + derived;
+  show(box, true);
 }
 
 function renderNoMatch(p) {
@@ -203,6 +232,8 @@ function renderEvidence(p) {
         ? '<span class="tag tag--lex">Lexikal</span>'
         : '<span class="tag">Vektor</span>').join("");
     const bestPill = isBest ? '<span class="tag tag--best">Bästa träff</span>' : "";
+    const notPrimaryTag = c.not_primary_diagnosis
+      ? '<span class="tag tag--notprimary">Ej huvuddiagnos</span>' : "";
     const reason = reasonBy.get(c.code);
     const conf = isFake ? "" : `<td class="num">${num(confBy.get(c.code), 2)}</td>`;
     const modelRank = rankBy.has(c.code) ? `#${rankBy.get(c.code)}` : "—";
@@ -211,7 +242,7 @@ function renderEvidence(p) {
       `<td><span class="rank">${index + 1}</span></td>` +
       `<td class="cell-code">${esc(c.code)}</td>` +
       `<td><span class="cell-term">${esc(c.preferred_term)}</span>` +
-        `<span class="cell-sub">${bestPill}${badges}` +
+        `<span class="cell-sub">${bestPill}${notPrimaryTag}${badges}` +
         (reason ? `<span class="cell-reason">${esc(reason)}</span>` : "") +
         `</span></td>` +
       `<td><span class="tag tag--field">${esc(FIELD_LABEL[c.matched_field] || "—")}</span></td>` +

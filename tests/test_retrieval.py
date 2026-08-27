@@ -474,3 +474,56 @@ def test_title_terms_find_the_code_either_way(
         )
         assert results[0].code == "FNG02", (query, descriptions)
         assert results[0].matched_field == "title"
+
+
+# ------------------------------------------------------------ index usage
+
+
+def test_the_trigram_predicate_is_indexable(db_session: Session, icd10se_loaded: str) -> None:
+    """The `<<%` operator form must stay index-servable.
+
+    Size-independent on purpose: with a 27-concept fixture the planner will
+    rightly choose a sequential scan, so this asserts that an index path
+    *exists*, not that it is chosen. It fails the moment someone rewrites the
+    predicate as `strict_word_similarity(...) >= x`, which no index can serve
+    and which would put the query back to a full scan at release size.
+    """
+    import sqlalchemy as sa
+
+    db_session.execute(sa.text("SET LOCAL enable_seqscan = off"))
+    db_session.execute(
+        sa.text("SELECT set_config('pg_trgm.strict_word_similarity_threshold','0.45',true)")
+    )
+    plan = "\n".join(
+        row[0]
+        for row in db_session.execute(
+            sa.text(
+                # No system/version predicate: with a small fixture the
+                # planner would otherwise satisfy the query from the
+                # (system, version) index and apply the trigram as a filter,
+                # which tells us nothing about the operator.
+                "EXPLAIN SELECT code FROM concepts WHERE :q <<% search_text"
+            ),
+            {"q": "blodtryck"},
+        ).all()
+    )
+    assert "ix_concepts_trgm" in plan, plan
+    assert "Index Cond" in plan, plan
+
+
+def test_the_full_text_predicate_is_indexable(db_session: Session, icd10se_loaded: str) -> None:
+    """Same guarantee for the weighted tsvector column."""
+    import sqlalchemy as sa
+
+    db_session.execute(sa.text("SET LOCAL enable_seqscan = off"))
+    plan = "\n".join(
+        row[0]
+        for row in db_session.execute(
+            sa.text(
+                "EXPLAIN SELECT code FROM concepts "
+                "WHERE search_vector @@ websearch_to_tsquery('swedish', :q)"
+            ),
+            {"q": "blodtryck"},
+        ).all()
+    )
+    assert "ix_concepts_search_vector" in plan, plan
