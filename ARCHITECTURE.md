@@ -495,6 +495,55 @@ fixed in different places.
 
 ---
 
+### Vector search resolves the space before it orders by distance
+
+The HNSW index on `concept_embeddings` covers `embedding` alone, but every
+search also filters by `(system, version, provider, model)` — two terminologies
+and more than one model share that table by design. Postgres can only apply
+that filter to what the index hands back: pgvector walks the graph, returns at
+most `hnsw.ef_search` entries (40 by default), and stops. When those entries
+belong to another embedding space, or are dead tuples VACUUM has not reclaimed,
+the filter removes all of them and the search returns **nothing** — while a
+sequential scan over the same rows returns every match.
+
+Which plan Postgres picks depends on table statistics, so this surfaced as an
+intermittent failure in three tests that only ever appeared in a full suite run:
+the vector stage returned zero candidates, then passed on the next run and in
+isolation. It was not a test artefact. The same shape reaches production the
+moment a second `(provider, model)` space exists — the search silently returns
+fewer concepts than it should, or none, and a proposal built on it looks
+perfectly ordinary.
+
+So `app/retrieval/vector.py` resolves the space in a `MATERIALIZED` CTE first
+and orders the result, which takes the index out of the ordering decision. The
+answer is then exact and identical under every plan.
+
+Measured on 12k concepts in one space (about the size of ICD-10-SE or KVÅ):
+
+| Query form | Median | Correct under every plan |
+| --- | --- | --- |
+| HNSW answers the `ORDER BY` | 2.2 ms | no |
+| `MATERIALIZED` CTE, exact | 70.9 ms | yes |
+
+71 ms is the right trade here. The LLM rerank in the same request costs seconds,
+a human validates every proposal before it means anything, and a silent
+under-return is the one failure this tool must not have. It stops being the
+right trade in the low hundreds of thousands of concepts per space — SNOMED CT
+in phase 4 is that size. The fix at that point is a **partial HNSW index per
+embedding space**, so that every entry in the index already satisfies the
+filter and post-filtering cannot starve the scan; that is a schema change with
+its own migration, not a tuning knob, and it is not needed at phase 1–3 sizes.
+
+The index itself is left in place, unused by this query, for that future.
+
+Held by `tests/test_vector_index_scan.py` — in particular
+`test_the_embedding_space_is_resolved_before_ordering`, which asserts the plan
+never names `ix_concept_embeddings_hnsw`. It fails immediately if `MATERIALIZED`
+is dropped, unlike the original bug, which needed the planner to be in the wrong
+mood.
+
+---
+
 ## Known limitations
 
 1. **No stemming or lemmatisation.** Swedish medical vocabulary is dominated by
@@ -565,6 +614,6 @@ fixed in different places.
 | 4 | SNOMED CT loader (requires an affiliate licence — see [LICENSING.md](LICENSING.md)) |
 | 5 | Boundary integration: validated mappings crossing an organisational boundary |
 
-Phase 2 is deliberately not started. The MCP server is a second surface over the
-same terminology adapters; building it before the adapters are proven means
-building it twice.
+Phase 2 is merged: `terminology-mcp` is a second surface over the same
+terminology adapters, built only once those adapters were proven. Phase 3 is
+next and has not been started.
