@@ -315,22 +315,36 @@ See [`.env.example`](.env.example) for the available options.
 
 ## Project status
 
-**Phase 1: complete and ready for review.**
+**Phase 1 is closed.** The model, the retrieval and validation pipeline, the
+audit trail and the web page are complete and verified.
 
-Verified before publication: the full test suite (284 tests; 2 are skipped
-when no AI provider key is present), code linting,
-formatting, strict type checking, database migrations from an empty database,
-Docker startup, sample and real KVÅ loading, the "no good match" behaviour, and
-the append-only protections.
+Verified before publication: the full test suite, code linting, formatting,
+strict type checking, database migrations from an empty database, Docker
+startup, sample and real KVÅ loading, the "no good match" behaviour, and the
+append-only protections.
+
+**Phase 2** will add an MCP server: a second, machine-readable interface onto
+the same terminology adapters, so another program can look up a concept or find
+similar ones without going through the web page. It adds no new terminology
+logic — it is a second surface over the model Phase 1 closed.
+
+Also deferred: SNOMED CT content, a comparative retrieval benchmark, an
+autocomplete endpoint, a bilingual interface, and user authentication.
 
 This is **not** a production system and it is **not** clinically validated. No
-accuracy figures are published, because a meaningful figure requires a
-carefully prepared reference set that does not yet exist. The project includes
-the measuring tool, not a result.
+accuracy figures are published, because a meaningful figure requires a carefully
+prepared reference set that does not yet exist. The project includes the
+measuring tool, not a result.
 
-Deferred to later phases: a second machine-readable interface, a comparative
-retrieval benchmark, SNOMED CT content, integration with an external exchange
-layer, and user authentication.
+---
+
+## Related projects
+
+**[sijill](https://github.com/abdulwahed-sweden/sijill)** — an
+inter-organisational exchange layer. This tool produces a validated
+`(system, version, code, decision_id)`. Only the first three are meant to cross
+an organisational boundary; the decision record, and the free text behind it,
+stay local.
 
 ---
 
@@ -342,6 +356,7 @@ layer, and user authentication.
 | [PHASE1_REPORT.md](PHASE1_REPORT.md) | What was built, what was assumed, and open questions |
 | [LICENSING.md](LICENSING.md) | Where terminology files come from and how they may be used |
 | [docs/MANUAL_UI_TEST.md](docs/MANUAL_UI_TEST.md) | Manual checklist for testing the web page |
+| [SECURITY.md](SECURITY.md) | How to report a security issue |
 
 ---
 

@@ -1,5 +1,9 @@
 # Design Change Plan — Validator UI (Al-Noor Design System v1.1)
 
+> **Close-out note (2026-08-27):** phases 3 (self-hosted fonts), 5
+> (autocomplete) and 6 (bilingual toggle) remain deferred and are tracked for
+> Phase 2 and later. Nothing in them blocks Phase 1.
+
 **Status: IMPLEMENTED (phases 1, 2 and 4).** Phases 3 (self-hosted fonts),
 5 (autocomplete) and 6 (bilingual toggle) are **not** implemented — see §9 and
 the decisions recorded in §12.
