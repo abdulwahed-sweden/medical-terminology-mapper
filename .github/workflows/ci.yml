@@ -60,7 +60,7 @@ jobs:
       - name: Test
         # No API keys are configured, so the live provider smoke tests skip and
         # the suite still runs green -- that is the point of the fakes.
-        run: pytest -q --cov=app --cov=evaluation --cov-report=term-missing
+        run: pytest -q --cov=app --cov=mcp_server --cov=evaluation --cov-report=term-missing
 
       - name: Quick start smoke test
         # Proves the documented no-API-key path actually works: migrate, load
@@ -74,15 +74,5 @@ jobs:
             --provider fake
           python evaluation/run_eval.py --gold evaluation/gold/sample_icd10se.csv \
             --system icd10se --version 2026-sample --provider fake
-          # The MCP server must start and answer a tool call in-process.
-          python -c "
-import asyncio, json
-from mcp import Client
-from mcp_server.server import build_server
-async def main():
-    async with Client(build_server()) as c:
-        r = await c.call_tool('list_terminologies', {})
-        assert json.loads(r.content[0].text)['ok'] is True
-        print('mcp smoke: ok')
-asyncio.run(main())
-"
+          # The MCP server must build and serve a tool call in-process.
+          python scripts/mcp_smoke.py
