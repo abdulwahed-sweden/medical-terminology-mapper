@@ -219,10 +219,14 @@ def test_kva_hierarchy(kva_concepts: dict[str, Concept]) -> None:
     assert kva_concepts["EMA00"].parent_code == "EMA"
     assert kva_concepts["EMA"].is_leaf is False
     assert kva_concepts["EMA00"].is_leaf is True
-    assert kva_concepts["EMA00"].chapter == "EMA"
-    # KMÅ codes in this sample have no parent rows, so they are their own roots.
-    assert kva_concepts["AF015"].parent_code is None
-    assert kva_concepts["AF015"].chapter is None
+    # The chapter comes from the code structure, so it is the topmost level (E)
+    # and not merely the last ancestor that happens to be a row in the file.
+    assert kva_concepts["EMA00"].chapter == "E"
+    assert kva_concepts["EMA00"].parent_source == "column"
+    # KMÅ codes carry no Överordnad kod here, so their hierarchy is derived.
+    assert kva_concepts["AF015"].parent_code == "AF"
+    assert kva_concepts["AF015"].parent_source == "derived"
+    assert kva_concepts["AF015"].chapter == "AF"
 
 
 def test_kva_exclusion_terms_are_not_synonyms(kva_concepts: dict[str, Concept]) -> None:
@@ -395,8 +399,9 @@ def test_workbook_error_names_the_sheets_examined(tmp_path: Path) -> None:
 def test_a_source_without_parent_links_still_loads(tmp_path: Path) -> None:
     """The published KVÅ workbook has no `Överordnad kod` column.
 
-    The hierarchy is then flat -- correctly so, since the source carries none.
-    A warning is logged, because a silently flat hierarchy is easy to miss.
+    The hierarchy is not lost: KVÅ states it in the code itself, so it is read
+    back out and marked `derived`. A warning is still logged, because the
+    absence of the column is worth knowing.
     """
     workbook = _write_xlsx(
         tmp_path / "kva.xlsx",
@@ -405,8 +410,8 @@ def test_a_source_without_parent_links_still_loads(tmp_path: Path) -> None:
     )
     concepts = list(KVA().load(workbook, "2026"))
     assert len(concepts) == 2
-    assert all(c.parent_code is None for c in concepts)
-    assert all(c.chapter is None for c in concepts)
+    assert all(c.parent_source == "derived" for c in concepts)
+    assert {c.code: c.parent_code for c in concepts} == {"AF015": "AF", "AA001": "AA"}
     assert all(c.is_leaf for c in concepts)
 
 

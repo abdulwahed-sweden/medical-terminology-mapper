@@ -35,7 +35,7 @@ _SQL = sa.text(
       AND e.version = :version
       AND e.provider = :provider
       AND e.model = :model
-      AND c.code NOT LIKE '%-%'
+      AND c.assignable
     ORDER BY e.embedding <=> CAST(:query_vector AS vector)
     LIMIT :limit
     """

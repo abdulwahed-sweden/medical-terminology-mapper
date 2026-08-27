@@ -132,6 +132,7 @@ function renderSuggestion(p) {
   $("s-term").textContent = p.suggested_term || "";
   const top = (p.ranked || [])[0];
   $("s-reason").textContent = top ? top.reason : "";
+  renderHierarchy(p);
 
   if (p.provider_kind === "fake") {
     $("s-confidence").innerHTML =
@@ -145,6 +146,28 @@ function renderSuggestion(p) {
   }
   show($("state-suggestion"), true);
   focusState($("state-suggestion"));
+}
+
+/* The chain above the suggested code. Ancestors the release does not carry as
+ * rows still appear -- the chain is real even where the file omits it -- but
+ * without a title, and the whole line is marked when it was read from the
+ * code's structure rather than stated by the publisher. */
+function renderHierarchy(p) {
+  const nodes = p.suggested_hierarchy || [];
+  const box = $("s-hierarchy");
+  if (!nodes.length) { show(box, false); return; }
+
+  const parts = nodes.map((n) => {
+    const cls = n.title ? "crumbs__code" : "crumbs__code crumbs__code--plain";
+    const title = n.title ? ` title="${esc(n.title)}"` : "";
+    return `<span class="${cls}"${title}>${esc(n.code)}</span>`;
+  });
+  const derived = p.suggested_parent_source === "derived"
+    ? ' <span class="crumbs__derived">(härledd)</span>' : "";
+  box.innerHTML =
+    `<span class="crumbs__label">Hierarki</span>` +
+    parts.join('<span class="crumbs__sep" aria-hidden="true">›</span>') + derived;
+  show(box, true);
 }
 
 function renderNoMatch(p) {

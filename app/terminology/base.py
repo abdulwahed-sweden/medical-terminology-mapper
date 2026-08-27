@@ -30,7 +30,7 @@ import html
 import logging
 import re
 import unicodedata
-from collections.abc import Iterable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Literal, Protocol, runtime_checkable
 
@@ -53,6 +53,9 @@ class TerminologyFormatError(TerminologyError):
     """Raised when an input file does not match the documented official format."""
 
 
+ParentSource = Literal["column", "derived"]
+
+
 class Concept(BaseModel):
     system: SystemId
     version: str
@@ -62,6 +65,17 @@ class Concept(BaseModel):
     parent_code: str | None = None
     is_leaf: bool
     chapter: str | None = None
+
+    # Where `parent_code` came from. "column" means the publisher stated it.
+    # "derived" means it was read out of the code's own prefix structure --
+    # legitimate, because the classification is built that way, but it must
+    # never be presented as publisher-supplied.
+    parent_source: ParentSource | None = None
+
+    # False for chapter, section and group headings. They are loaded because
+    # the hierarchy needs them, and excluded from retrieval and from decisions
+    # because they name a group, not a codable concept.
+    assignable: bool = True
     # The publisher's Beskrivning: prose explaining what the code covers. Kept
     # apart from `synonyms` because it is not a name for the concept -- it is
     # indexed at a lower weight, and never used as a display term.
@@ -343,23 +357,53 @@ def collect_synonyms(
     return out
 
 
-def assign_hierarchy(concepts: list[Concept]) -> list[Concept]:
-    """Fill in `is_leaf` and `chapter` from the parent links in the same load.
+def assign_hierarchy(
+    concepts: list[Concept],
+    *,
+    derive_parent: Callable[[str], str | None] | None = None,
+    derive_chapter: Callable[[str], str | None] | None = None,
+) -> list[Concept]:
+    """Fill in `parent_source`, `is_leaf` and `chapter`.
+
+    A parent stated by the publisher always wins; `derive_parent` is consulted
+    only for concepts that have none. That is the whole point of recording
+    `parent_source` -- a derived link is an inference from the code's structure,
+    and a reader has to be able to tell the two apart.
 
     `is_leaf` is derived structurally -- a concept is a leaf when no other
     concept in the load names it as parent -- rather than read from the
-    publisher's Kodniva column, whose value set is not documented in the file
-    description PDFs.
+    publisher's Kodniva column, whose value set the file descriptions do not
+    enumerate. A heading is never a leaf.
 
-    `chapter` is the topmost ancestor reached by walking parent links, which for
-    ICD-10-SE is the chapter interval (for example `I00-I99`).
+    `chapter` is the topmost ancestor reached by walking parent links. When the
+    walk cannot resolve (the source carries codes but not their ancestors, as
+    the KVA workbook does), `derive_chapter` supplies it from the code itself.
     """
+    for concept in concepts:
+        if concept.parent_code:
+            concept.parent_source = "column"
+        elif derive_parent is not None:
+            derived = derive_parent(concept.code)
+            if derived and derived != concept.code:
+                concept.parent_code = derived
+                concept.parent_source = "derived"
+
     by_code = {concept.code: concept for concept in concepts}
     parents = {concept.parent_code for concept in concepts if concept.parent_code}
 
     for concept in concepts:
-        concept.is_leaf = concept.code not in parents
-        concept.chapter = _root_of(concept, by_code)
+        concept.is_leaf = concept.assignable and concept.code not in parents
+        chapter: str | None = None
+        if derive_chapter is not None:
+            # For a prefix-structured source the code itself states the chapter,
+            # and it states it completely. Walking parent links would instead
+            # stop at the last ancestor that happens to exist as a row -- EMA00
+            # would report "EMA" rather than "E", because EM is not in the file.
+            candidate = derive_chapter(concept.code)
+            chapter = candidate if candidate and candidate != concept.code else None
+        if chapter is None:
+            chapter = _root_of(concept, by_code)
+        concept.chapter = chapter
     return concepts
 
 

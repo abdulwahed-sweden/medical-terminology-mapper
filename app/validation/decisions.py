@@ -143,37 +143,33 @@ def _validate_code(session: Session, proposal: ProposalRow, code: str) -> str:
     if validator is None:  # pragma: no cover - target_system is constrained upstream
         raise InvalidDecision(f"unknown target system {system!r}")
 
-    # Looked up first, because "exists but is not assignable" and "does not
-    # exist" need different messages, and only one of them means the user made
-    # a typo.
-    exists = session.execute(
-        sa.select(sa.func.count())
-        .select_from(ConceptRow)
-        .where(
+    # The concept row is the authority on whether a code is codable. Before
+    # `assignable` was stored this was inferred from "exists but fails the
+    # format check", which happened to be right for code intervals and would
+    # have been wrong for anything subtler.
+    row = session.execute(
+        sa.select(ConceptRow.assignable).where(
             ConceptRow.system == system,
             ConceptRow.version == proposal.terminology_version,
             ConceptRow.code == code,
         )
-    ).scalar_one()
+    ).one_or_none()
 
-    if not validator.validate_code_format(code):
-        if exists:
-            # A chapter, section or group heading -- "I10-I15", "EMA". The user
-            # found something real and picked the group instead of a code inside
-            # it; saying so is far more useful than "invalid format".
-            raise InvalidDecision(
-                f"koden {code} är en rubrik i {system} "
-                f"{proposal.terminology_version}, inte en tilldelningsbar kod"
-            )
-        raise InvalidDecision(f"koden {code} har inte giltigt format för {system}")
-
-    # Beyond format: the code must actually exist in the version this proposal
-    # was computed against. A well-formed code that is not in the release would
-    # still be an invalid mapping, and this is the last point at which anything
-    # can catch it.
-    if not exists:
+    if row is None:
+        if not validator.validate_code_format(code):
+            raise InvalidDecision(f"koden {code} har inte giltigt format för {system}")
         raise InvalidDecision(
             f"koden {code} har giltigt format men finns inte i "
             f"{system} version {proposal.terminology_version}"
         )
+
+    if not row.assignable:
+        # A chapter, section or group heading. The user found something real and
+        # picked the group instead of a code inside it; saying so is far more
+        # useful than "invalid format".
+        raise InvalidDecision(
+            f"koden {code} är en rubrik i {system} "
+            f"{proposal.terminology_version}, inte en tilldelningsbar kod"
+        )
+
     return code

@@ -295,6 +295,22 @@ body {
 .hero__reason { margin: 6px 0 0; font-size: 14.5px; color: var(--ink-500); }
 .hero__meta { margin: var(--s-3) 0 0; font-size: var(--fs-sm); color: var(--ink-500); }
 
+.crumbs {
+  margin: var(--s-2) 0 0; font-size: var(--fs-sm); color: var(--ink-500);
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.crumbs__label {
+  font-size: 11.5px; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink-500);
+}
+.crumbs__code {
+  font-family: var(--mono); font-weight: 600; color: var(--teal);
+  border-bottom: 1px dotted var(--border);
+}
+.crumbs__code--plain { border-bottom: none; color: var(--ink-500); }
+.crumbs__sep { color: var(--ink-300); }
+.crumbs__derived { font-size: var(--fs-xs); color: var(--ink-500); font-style: italic; }
+
 .tag {
   display: inline-flex; align-items: center; gap: 5px;
   font-size: 11.5px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;

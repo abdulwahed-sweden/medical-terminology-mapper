@@ -19,6 +19,7 @@ release, which is indirect evidence that the approach holds. See LICENSING.md §
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -29,6 +30,8 @@ from app.terminology.base import (
     collect_synonyms,
     read_classification_file,
 )
+
+logger = logging.getLogger(__name__)
 
 # Letter + two digits, optionally a dot and one or two alphanumerics.
 # Four-position codes ("I21.9") and Swedish national five-position extensions
@@ -72,8 +75,20 @@ class ICD10SE:
                     is_leaf=True,
                     chapter=None,
                     description=description,
+                    # Chapter and section rows carry a code interval
+                    # ("I10-I15") or a manifestation marker; they name a group,
+                    # not a codable concept.
+                    assignable=self.validate_code_format(code),
                 )
             )
+        headings = sum(1 for concept in concepts if not concept.assignable)
+        if headings:
+            logger.info(
+                "classification_headings_loaded",
+                extra={"path": str(path), "headings": headings, "total": len(concepts)},
+            )
+        # ICD-10-SE states Overordnad kod for every row, so no derivation is
+        # needed or wanted here.
         return assign_hierarchy(concepts)
 
     def validate_code_format(self, code: str) -> bool:

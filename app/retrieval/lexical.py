@@ -72,8 +72,9 @@ _SQL = """
     FROM concepts c, q
     WHERE c.system = :system
       AND c.version = :version
-      -- A code interval ("I10-I15") names a group, not an assignable code.
-      AND c.code NOT LIKE '%-%'
+      -- Headings name a group, not a codable concept. Filtered here rather
+      -- than after the fact, so they never consume a top-K slot.
+      AND c.assignable
       AND (
             ({match_condition})
             -- `<<%` honours pg_trgm.strict_word_similarity_threshold, set below.

@@ -66,6 +66,14 @@ class ValidatedMapping(BaseModel):
     decision_id: uuid.UUID
 
 
+class HierarchyNode(BaseModel):
+    """One step in a code's ancestor chain. `title` is null when the release
+    carries the code but not a row for that ancestor."""
+
+    code: str
+    title: str | None = None
+
+
 class GateOut(BaseModel):
     """The retrieval gate's verdict, so "nothing was found" stays checkable."""
 
@@ -94,6 +102,8 @@ class ProposalOut(BaseModel):
 
     suggested_code: str | None
     suggested_term: str | None
+    suggested_hierarchy: list[HierarchyNode] = Field(default_factory=list)
+    suggested_parent_source: Literal["column", "derived"] | None = None
     model_confidence: float | None
     no_good_match: bool
     notes: str | None

@@ -32,6 +32,7 @@ assignable procedure codes, which `validate_code_format` reflects.
 
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Iterable
 from pathlib import Path
@@ -43,9 +44,69 @@ from app.terminology.base import (
     read_classification_file,
 )
 
+logger = logging.getLogger(__name__)
+
 KVA_CODE_RE = re.compile(r"^([A-Z]{3}[0-9]{2}|[A-Z]{2}[0-9]{3})$")
 
-# Naming variants only. Beskrivning, Anmärkning and Kodningsinformation are
+# KVA encodes its hierarchy in the code itself, so a workbook that omits the
+# Overordnad kod column is not missing the hierarchy -- it is stating it a
+# different way. Reading it back out is reading the classification as designed;
+# it is still recorded as `parent_source="derived"` so nobody mistakes it for a
+# publisher-supplied link.
+#
+#   KKA (NCSP structure)   F  ->  FN   ->  FNG  ->  FNG02
+#                          chapter  section  group    code
+#   KMA                    AF ->  AF015
+#                          chapter        code
+_KKA_CODE = re.compile(r"^[A-Z]{3}[0-9]{2}$")
+_KMA_CODE = re.compile(r"^[A-Z]{2}[0-9]{3}$")
+_KKA_GROUP = re.compile(r"^[A-Z]{3}$")
+
+
+def derive_parent(code: str) -> str | None:
+    """The next level up, read from the code's prefix structure."""
+    code = code.strip().upper()
+    if _KKA_CODE.match(code):
+        return code[:3]
+    if _KMA_CODE.match(code):
+        return code[:2]
+    if _KKA_GROUP.match(code):
+        return code[:2]
+    # A two-letter code is ambiguous: it is a KKA section (parent = its letter)
+    # or a KMA chapter (no parent), and the code alone cannot say which. No
+    # such rows exist in the published release, so nothing is lost by declining
+    # to guess.
+    return None
+
+
+def derive_chapter(code: str) -> str | None:
+    """The topmost level, read from the code's prefix structure."""
+    code = code.strip().upper()
+    if _KKA_CODE.match(code) or _KKA_GROUP.match(code):
+        return code[:1]
+    if _KMA_CODE.match(code):
+        return code[:2]
+    return None
+
+
+def ancestors(code: str) -> list[str]:
+    """The full chain above a code, outermost first: FNG02 -> [F, FN, FNG].
+
+    Built from the code's shape rather than by walking `derive_parent`, because
+    the walk stops at a two-letter code -- that shape is ambiguous on its own,
+    but inside a known KKA code it is unambiguously the section.
+    """
+    code = code.strip().upper()
+    if _KKA_CODE.match(code):
+        return [code[:1], code[:2], code[:3]]
+    if _KKA_GROUP.match(code):
+        return [code[:1], code[:2]]
+    if _KMA_CODE.match(code):
+        return [code[:2]]
+    return []
+
+
+# Naming variants only. Beskrivning, Anmarkning and Kodningsinformation are
 # guidance prose rather than names for the procedure, and Utesluter states what
 # the code does not cover -- see `collect_synonyms`.
 _SYNONYM_FIELDS = ("abbreviations", "includes", "example")
@@ -79,9 +140,18 @@ class KVA:
                     is_leaf=True,
                     chapter=None,
                     description=description,
+                    assignable=self.validate_code_format(code),
                 )
             )
-        return assign_hierarchy(concepts)
+        headings = sum(1 for concept in concepts if not concept.assignable)
+        if headings:
+            logger.info(
+                "classification_headings_loaded",
+                extra={"path": str(path), "headings": headings, "total": len(concepts)},
+            )
+        return assign_hierarchy(
+            concepts, derive_parent=derive_parent, derive_chapter=derive_chapter
+        )
 
     def validate_code_format(self, code: str) -> bool:
         return bool(KVA_CODE_RE.match(code.strip().upper()))
