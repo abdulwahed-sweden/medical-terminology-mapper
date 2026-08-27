@@ -36,6 +36,9 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "pyyaml>=6.0",
+    # Second line of defence for the test suite: ordinary tests may reach local
+    # infrastructure and nothing else. See tests/conftest.py.
+    "pytest-socket>=0.7",
 ]
 
 [build-system]
