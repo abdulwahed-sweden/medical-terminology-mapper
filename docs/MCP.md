@@ -96,6 +96,13 @@ docker compose exec app terminology-mcp
 There is deliberately **no new compose service**: a stdio server is launched by
 its client, not run as a daemon.
 
+> **The client snippets below are unverified.** They are written from each
+> client's documented configuration format, not from a run against that client
+> on this machine. The server itself is tested — in-memory, over HTTP, and
+> inside the container on every CI run — but whether *this JSON* is what *your*
+> client wants is a separate question. Follow **How to verify** below and delete
+> this note once it works for you.
+
 ### Claude Desktop
 
 Add to `claude_desktop_config.json`
@@ -160,6 +167,69 @@ access control.
 
 stdio remains the supported path for clients: it is how MCP clients launch a
 local server, and it has no port for anything to reach.
+
+### How to verify
+
+Everything here runs against the compose container, so nothing depends on a
+local virtualenv.
+
+**1. Start the stack and load the sample data.**
+
+```bash
+docker compose up -d
+docker compose exec app alembic upgrade head
+docker compose exec app python scripts/load_terminology.py \
+  --system icd10se --version 2026-sample \
+  --file tests/fixtures/icd10se_sample.txt
+```
+
+**2. Register the server** (replace the path with your checkout):
+
+```bash
+claude mcp add terminology -- \
+  docker compose -f /absolute/path/to/medical-terminology-mapper/docker-compose.yml \
+  exec -T app terminology-mcp
+```
+
+**3. Make the first call** `list_terminologies`, with no arguments. It touches
+the database and the loaders but writes nothing, so it fails loudly if the
+wiring is wrong and cannot do damage if it is.
+
+A successful response looks like this — `concepts` counts and
+`embedding_spaces` will differ depending on what you have loaded:
+
+```json
+{
+  "ok": true,
+  "default_version": "2026",
+  "descriptions_indexed": true,
+  "terminologies": [
+    {
+      "system": "icd10se",
+      "version": "2026-sample",
+      "status": "loaded",
+      "concepts": {
+        "total": 27, "assignable": 19, "headings": 8,
+        "placeholders": 0, "with_description": 0
+      },
+      "embedding_spaces": ["fake/fake-hash-v1"]
+    },
+    {
+      "system": "snomed",
+      "version": null,
+      "status": "licence_required",
+      "message": "SNOMED CT content is not shipped with this repository. It requires an affiliate licence; see LICENSING.md."
+    }
+  ]
+}
+```
+
+`"ok": true` and at least one `"status": "loaded"` entry means the client, the
+container and the database are all talking to each other. `status` values of
+`not_loaded` mean the server is fine and the data is not there — go back to
+step 1. A transport-level error from the client instead of a JSON payload means
+the command in step 2 never started the server; run it by hand and see what it
+prints.
 
 ---
 

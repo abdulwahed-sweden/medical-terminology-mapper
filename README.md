@@ -315,16 +315,28 @@ See [`.env.example`](.env.example) for the available options.
 
 ## Project status
 
-**Phase 1 is closed. Phase 2 (the MCP server) is delivered.**
+**Phase 1 is closed. Phase 2 (the MCP server) is merged. Stabilisation is in
+progress.**
 
 Verified before publication: the full test suite, code linting, formatting,
 strict type checking, database migrations from an empty database, Docker
 startup, sample and real KVÅ loading, the "no good match" behaviour, and the
 append-only protections.
 
-**Phase 3** is next: a comparative benchmark measuring word matching against
-vector search against the full pipeline, computed from stored proposals. The
-measuring tool already exists; what it needs is a curated reference set.
+Stabilisation is the work between phase 2 and phase 3: closing the things that
+shipped unfinished rather than adding anything. So far that is a silent
+wrong-answer bug in vector search — the query could return no candidates at all
+depending on which plan the database chose, which is
+[recorded in ARCHITECTURE.md](ARCHITECTURE.md) — a CI job that builds the Docker
+image and calls the MCP server inside it, and a tested HTTP transport.
+
+**Phase 3** is next and has not been started: a comparative benchmark measuring
+word matching against vector search against the full pipeline, computed from
+stored proposals. The measuring tool already exists. What it needs before the
+comparison means anything is a curated reference set — see
+[evaluation/gold/GOLD_SET_GUIDE.md](evaluation/gold/GOLD_SET_GUIDE.md) for what
+that has to look like — and, for the arms that use a real embedding model, an
+API key. Until both exist the benchmark can be run but not believed.
 
 Also deferred: SNOMED CT content, an autocomplete endpoint, a bilingual
 interface, and user authentication.
