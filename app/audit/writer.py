@@ -57,6 +57,8 @@ def insert_proposal(
     gate_version: str,
     gate_fired: bool,
     gate_values: dict[str, Any],
+    origin: str = "api",
+    requested_by: str | None = None,
 ) -> ProposalRow:
     """Record one mapping attempt.
 
@@ -89,6 +91,8 @@ def insert_proposal(
         gate_version=gate_version,
         gate_fired=gate_fired,
         gate_values=gate_values,
+        origin=origin,
+        requested_by=requested_by,
     )
     session.add(row)
     session.flush()
@@ -102,6 +106,7 @@ def insert_proposal(
             "suggested_code": suggested_code,
             "candidate_count": len(candidates),
             "gate_fired": gate_fired,
+            "origin": origin,
         },
     )
     return row

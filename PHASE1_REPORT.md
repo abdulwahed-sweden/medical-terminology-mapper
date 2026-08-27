@@ -327,7 +327,11 @@ whenever a migration ran in-process.
 
 ---
 
-## 6. Phase 2 was not started
+## 6. Phase 2 was not started (at the time of the Phase 1 report)
+
+> **Superseded 2026-08-27.** Phase 2 (`terminology-mcp`) has since been built on
+> the `phase-2-mcp` branch. What follows describes the state at Phase 1 close.
+
 
 **No MCP server (`terminology-mcp`) was built, scaffolded, or stubbed.** Nothing
 in this repository imports or anticipates it beyond the adapter boundary that

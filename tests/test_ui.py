@@ -311,3 +311,19 @@ def test_hierarchy_breadcrumb_is_present(markup: str) -> None:
     assert 'id="s-hierarchy"' in markup
     assert "crumbs" in CSS.read_text(encoding="utf-8")
     assert "härledd" in JS.read_text(encoding="utf-8")
+
+
+def test_ci_workflow_is_valid_yaml() -> None:
+    """An invalid workflow does not fail loudly -- it produces a run with zero
+    jobs, which reads as a failure with no log. Worth one assertion."""
+    yaml = pytest.importorskip("yaml")
+
+    workflow = ROOT / ".github" / "workflows" / "ci.yml"
+    parsed = yaml.safe_load(workflow.read_text(encoding="utf-8"))
+    steps = parsed["jobs"]["quality"]["steps"]
+    names = [step.get("name") for step in steps]
+    for required in ("Lint", "Format", "Type-check", "Test"):
+        assert required in names, required
+    # Python belongs in a file, not inline in a YAML block scalar.
+    for step in steps:
+        assert 'python -c "' not in (step.get("run") or ""), step.get("name")

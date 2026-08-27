@@ -315,26 +315,44 @@ See [`.env.example`](.env.example) for the available options.
 
 ## Project status
 
-**Phase 1 is closed.** The model, the retrieval and validation pipeline, the
-audit trail and the web page are complete and verified.
+**Phase 1 is closed. Phase 2 (the MCP server) is delivered.**
 
 Verified before publication: the full test suite, code linting, formatting,
 strict type checking, database migrations from an empty database, Docker
 startup, sample and real KVÅ loading, the "no good match" behaviour, and the
 append-only protections.
 
-**Phase 2** will add an MCP server: a second, machine-readable interface onto
-the same terminology adapters, so another program can look up a concept or find
-similar ones without going through the web page. It adds no new terminology
-logic — it is a second surface over the model Phase 1 closed.
+**Phase 3** is next: a comparative benchmark measuring word matching against
+vector search against the full pipeline, computed from stored proposals. The
+measuring tool already exists; what it needs is a curated reference set.
 
-Also deferred: SNOMED CT content, a comparative retrieval benchmark, an
-autocomplete endpoint, a bilingual interface, and user authentication.
+Also deferred: SNOMED CT content, an autocomplete endpoint, a bilingual
+interface, and user authentication.
 
 This is **not** a production system and it is **not** clinically validated. No
 accuracy figures are published, because a meaningful figure requires a carefully
 prepared reference set that does not yet exist. The project includes the
 measuring tool, not a result.
+
+---
+
+## MCP server
+
+An [MCP](https://modelcontextprotocol.io) server, `terminology-mcp`, lets an AI
+assistant look codes up and **file a proposal** for you to review — from Claude
+Desktop, Claude Code, or any MCP client.
+
+It can read and it can propose. **It cannot decide.** There is deliberately no
+tool that accepts, rejects or corrects a proposal, because a mapping is only
+valid once a person has recorded a decision, and a model is not a person. An
+assistant that wants a code validated files a proposal and tells you to open the
+validator page.
+
+```bash
+docker compose exec app terminology-mcp
+```
+
+Setup, the tool list and client configuration: **[docs/MCP.md](docs/MCP.md)**.
 
 ---
 
@@ -356,6 +374,7 @@ stay local.
 | [PHASE1_REPORT.md](PHASE1_REPORT.md) | What was built, what was assumed, and open questions |
 | [LICENSING.md](LICENSING.md) | Where terminology files come from and how they may be used |
 | [docs/MANUAL_UI_TEST.md](docs/MANUAL_UI_TEST.md) | Manual checklist for testing the web page |
+| [docs/MCP.md](docs/MCP.md) | The MCP server: tools, safety rule, client setup |
 | [SECURITY.md](SECURITY.md) | How to report a security issue |
 
 ---

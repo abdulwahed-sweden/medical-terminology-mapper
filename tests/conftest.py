@@ -230,3 +230,9 @@ def kva_embedded(db_session: Session, kva_loaded: str) -> str:
     )
     db_session.flush()
     return kva_loaded
+
+
+@pytest.fixture(scope="session")
+def anyio_backend() -> str:
+    """The MCP tests are async; anyio drives them on asyncio."""
+    return "asyncio"

@@ -27,9 +27,7 @@ from app.models.candidate import Candidate
 from app.models.rerank import RerankResult
 from app.normalize.swedish import normalize
 from app.pipeline.gate import GATE_ID, GATE_VERSION, GateOutcome, evaluate_gate
-from app.retrieval.lexical import lexical_search
-from app.retrieval.merge import merge_candidates
-from app.retrieval.vector import vector_search
+from app.services.terminology import retrieve
 from app.terminology.base import TerminologyLicenceRequired
 
 logger = logging.getLogger(__name__)
@@ -64,6 +62,8 @@ def map_term(
     embedding_provider: EmbeddingProvider,
     llm_provider: LLMProvider,
     prompt: PromptSpec,
+    origin: str = "api",
+    requested_by: str | None = None,
 ) -> MapOutcome:
     if target_system == "snomed":
         raise TerminologyLicenceRequired(
@@ -85,41 +85,22 @@ def map_term(
     )
 
     # ------------------------------------------------------------- retrieval
-    retrieval_started = time.perf_counter()
-
-    lexical = lexical_search(
+    # One retrieval implementation, shared with the MCP server's read tools.
+    found = retrieve(
         session,
         query=normalized.normalized,
         system=target_system,
         version=terminology_version,
-        top_k=settings.lexical_top_k,
-        trigram_threshold=settings.trigram_threshold,
-        index_descriptions=settings.index_descriptions,
+        settings=settings,
+        embedding_provider=embedding_provider,
     )
-
-    query_vector = embedding_provider.embed([normalized.normalized])[0]
-    vector = vector_search(
-        session,
-        query_vector=query_vector,
-        system=target_system,
-        version=terminology_version,
-        provider=embedding_provider.provider_id,
-        model=embedding_provider.model_id,
-        top_k=settings.vector_top_k,
-    )
-
-    candidates = merge_candidates(
-        lexical,
-        vector,
-        rrf_k=settings.rrf_k,
-        cap=settings.rerank_candidate_cap,
-    )
-    latency_ms_retrieval = _elapsed_ms(retrieval_started)
+    candidates = found.candidates
+    latency_ms_retrieval = found.latency_ms
     logger.info(
         "retrieval_finished",
         extra={
-            "lexical_count": len(lexical),
-            "vector_count": len(vector),
+            "lexical_count": found.lexical_count,
+            "vector_count": found.vector_count,
             "merged_count": len(candidates),
             "latency_ms": latency_ms_retrieval,
         },
@@ -206,6 +187,8 @@ def map_term(
         gate_version=GATE_VERSION,
         gate_fired=gate.fired,
         gate_values={**gate.values, "reason": gate.reason},
+        origin=origin,
+        requested_by=requested_by,
     )
 
     return MapOutcome(

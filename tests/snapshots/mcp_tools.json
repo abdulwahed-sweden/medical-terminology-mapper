@@ -1,0 +1,79 @@
+{
+  "list_terminologies": {
+    "description": "Lists the code systems and versions currently loaded, with how many concepts each holds, split into codes you can assign, headings (chapters, sections and groups, which are never valid mappings) and placeholder codes. Also reports whether the publisher's descriptions are searchable and which embedding space is available. Call this first if you are unsure what to pass as `system` or `version`.",
+    "arguments": [],
+    "required": []
+  },
+  "search_concepts": {
+    "description": "Searches a code system for concepts matching a clinical phrase, using both word matching and vector similarity. Returns candidates with their scores and which field matched (term, synonym, description or vector). This is a lookup: no language model is called, nothing is written, and the scores measure how the text matched, not whether the code is clinically correct. To file something for a human to review, use propose_mapping.",
+    "arguments": [
+      "limit",
+      "query",
+      "system",
+      "version"
+    ],
+    "required": [
+      "query",
+      "system"
+    ]
+  },
+  "get_concept": {
+    "description": "Returns everything known about one code: its preferred term, synonyms, the publisher's description, where it sits in the hierarchy (each ancestor with its title), its direct children, and the flags that decide how it may be used -- whether it is assignable at all, whether the publisher forbids it as a primary diagnosis, and whether it is a reserved placeholder. Use this after search_concepts to check a specific code before proposing it.",
+    "arguments": [
+      "code",
+      "system",
+      "version"
+    ],
+    "required": [
+      "code",
+      "system"
+    ]
+  },
+  "find_similar_concepts": {
+    "description": "Like search_concepts, but also reports what the retrieval gate would conclude about the evidence: whether it is strong enough to be worth ranking at all, and the values behind that judgement. Use it to find out whether a phrase has any real support in the code system before proposing it. No language model is called and nothing is written.",
+    "arguments": [
+      "limit",
+      "system",
+      "term",
+      "version"
+    ],
+    "required": [
+      "system",
+      "term"
+    ]
+  },
+  "validate_code": {
+    "description": "Checks whether a code may be used as a mapping in a given code system and version, using exactly the rules the validator interface applies. Reports whether the format is valid, whether the code exists in that release, whether it is assignable or a heading, whether it is a placeholder, and whether the publisher forbids it as a primary diagnosis -- with the message a human reviewer would see. Nothing is written.",
+    "arguments": [
+      "code",
+      "system",
+      "version"
+    ],
+    "required": [
+      "code",
+      "system"
+    ]
+  },
+  "propose_mapping": {
+    "description": "Runs a clinical phrase through the full mapping pipeline and files the result as a proposal: it searches, checks the evidence, asks the ranking model when there is enough evidence to be worth it, and writes an auditable record. Creates an auditable proposal. This is not a validated mapping; a human must review it in the validator interface. There is deliberately no tool to accept or reject proposals. After calling this, tell the user the proposal id and ask them to open the validator page. Use `requested_by` to say which client you are; it is recorded on the proposal and is not a reviewer identity.",
+    "arguments": [
+      "requested_by",
+      "system",
+      "text",
+      "version"
+    ],
+    "required": [
+      "system",
+      "text"
+    ]
+  },
+  "get_proposal_status": {
+    "description": "Looks up a proposal you filed earlier and reports whether a human has decided on it yet. If they have, returns the decision, who made it, when, and the validated mapping. Read only -- this cannot make or change a decision.",
+    "arguments": [
+      "proposal_id"
+    ],
+    "required": [
+      "proposal_id"
+    ]
+  }
+}

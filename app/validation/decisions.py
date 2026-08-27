@@ -16,12 +16,11 @@ import logging
 import uuid
 from typing import Literal
 
-import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.audit.models import DecisionRow, ProposalRow
 from app.audit.writer import get_decision_for, get_proposal, insert_decision
-from app.db.models import ConceptRow
+from app.services.terminology import inspect_code
 from app.terminology.base import TerminologySystem
 from app.terminology.icd10se import ICD10SE
 from app.terminology.kva import KVA
@@ -167,46 +166,24 @@ def _validate_code(
     *,
     acknowledge_placeholder: bool = False,
 ) -> str:
-    system = proposal.target_system
-    validator = VALIDATORS.get(system)
-    if validator is None:  # pragma: no cover - target_system is constrained upstream
-        raise InvalidDecision(f"unknown target system {system!r}")
+    """Decide whether a human-supplied code may be recorded.
 
-    # The concept row is the authority on whether a code is codable. Before
-    # `assignable` was stored this was inferred from "exists but fails the
-    # format check", which happened to be right for code intervals and would
-    # have been wrong for anything subtler.
-    row = session.execute(
-        sa.select(ConceptRow.assignable, ConceptRow.placeholder).where(
-            ConceptRow.system == system,
-            ConceptRow.version == proposal.terminology_version,
-            ConceptRow.code == code,
-        )
-    ).one_or_none()
+    The judgement itself lives in `services.terminology.inspect_code`, so the
+    validator page, the HTTP API and the MCP server all reach the same verdict
+    and quote the same sentence. This function adds only what is specific to
+    *recording* one: a placeholder may be recorded deliberately, so it is a
+    warning to acknowledge rather than a refusal.
+    """
+    verdict = inspect_code(
+        session,
+        system=proposal.target_system,
+        version=proposal.terminology_version,
+        code=code,
+    )
 
-    if row is None:
-        if not validator.validate_code_format(code):
-            raise InvalidDecision(f"koden {code} har inte giltigt format för {system}")
-        raise InvalidDecision(
-            f"koden {code} har giltigt format men finns inte i "
-            f"{system} version {proposal.terminology_version}"
-        )
+    if verdict.verdict == "placeholder" and not acknowledge_placeholder:
+        raise PlaceholderCodeNotAcknowledged(verdict.message or "")
+    if verdict.verdict in {"bad_format", "not_present", "heading"}:
+        raise InvalidDecision(verdict.message or "")
 
-    if row.placeholder and not acknowledge_placeholder:
-        # A reserved U-code slot. It is a real code and a human may deliberately
-        # record it, so this is not a refusal -- it is a warning that has to be
-        # acknowledged, which is what the page's confirm step does.
-        raise PlaceholderCodeNotAcknowledged(
-            f"koden {code} är en platshållarkod (U-kod) och föreslås inte"
-        )
-
-    if not row.assignable:
-        # A chapter, section or group heading. The user found something real and
-        # picked the group instead of a code inside it; saying so is far more
-        # useful than "invalid format".
-        raise InvalidDecision(
-            f"koden {code} är en rubrik i {system} "
-            f"{proposal.terminology_version}, inte en tilldelningsbar kod"
-        )
-
-    return code
+    return verdict.code
