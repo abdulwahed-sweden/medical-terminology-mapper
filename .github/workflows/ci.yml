@@ -76,3 +76,48 @@ jobs:
             --system icd10se --version 2026-sample --provider fake
           # The MCP server must build and serve a tool call in-process.
           python scripts/mcp_smoke.py
+
+  image:
+    name: image · mcp entry point in the container
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image and start the stack
+        # The documented quick start is `docker compose up`, so that is what is
+        # tested. The image not installing the project is exactly the kind of
+        # defect this job exists to catch: it broke `terminology-mcp` while
+        # every unit test stayed green.
+        run: docker compose up -d --build
+
+      - name: Migrate
+        run: docker compose exec -T app alembic upgrade head
+
+      - name: Load the sample fixtures
+        # Sample only. Embedding a real release would put this job well past
+        # the few minutes it is allowed to take.
+        run: |
+          docker compose exec -T app python scripts/load_terminology.py \
+            --system icd10se --version 2026-sample \
+            --file tests/fixtures/icd10se_sample.txt
+
+      - name: MCP smoke test inside the container
+        run: docker compose exec -T app python scripts/mcp_smoke.py
+
+      - name: The project is installed, not merely importable from its own directory
+        # A console script's sys.path[0] is the script's directory, not the
+        # working directory, so `import app` from anywhere else is the thing
+        # that actually proves the editable install took.
+        run: docker compose exec -T app sh -c 'cd /tmp && python -c "import app, mcp_server"'
+
+      - name: The terminology-mcp entry point resolves outside the source tree
+        run: docker compose exec -T app sh -c 'cd /tmp && terminology-mcp --help'
+
+      - name: Container logs on failure
+        if: failure()
+        run: docker compose logs --tail 80
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down -v
