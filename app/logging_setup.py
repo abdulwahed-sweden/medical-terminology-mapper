@@ -14,8 +14,7 @@ import sys
 import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import TextIO
-from typing import Any
+from typing import Any, TextIO
 
 _trace_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("trace_id", default=None)
 

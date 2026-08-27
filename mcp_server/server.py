@@ -62,7 +62,9 @@ DEFAULT_LIMIT = 10
 MAX_LIMIT = 50
 
 # Shown with every proposal so the calling agent can tell its human where to go.
-VALIDATOR_URL_PATTERN = "http://localhost:8000/  (open the validator page, then look up proposal {proposal_id})"
+VALIDATOR_URL_PATTERN = (
+    "http://localhost:8000/  (open the validator page, then look up proposal {proposal_id})"
+)
 
 T = TypeVar("T")
 
@@ -435,9 +437,7 @@ def build_server() -> MCPServer:
                             "This is a proposal, not a mapping. Ask a human to review it "
                             "in the validator interface; no tool here can accept it."
                         ),
-                        "validator_url": VALIDATOR_URL_PATTERN.format(
-                            proposal_id=proposal.id
-                        ),
+                        "validator_url": VALIDATOR_URL_PATTERN.format(proposal_id=proposal.id),
                         "test_mode_note": (
                             "The ranking provider is a deterministic stand-in, so no "
                             "confidence is reported and the ordering means nothing "
