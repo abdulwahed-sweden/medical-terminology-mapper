@@ -6,6 +6,14 @@ part of the trail too -- silently dropping it would leave a gap exactly where
 someone later asks "what happened when I typed that?".
 
 Nothing here decides anything. The output is always a proposal awaiting a human.
+
+The `arm` argument exists for the phase 3 comparison and nothing else. Every
+product surface -- the validator page, the API, the MCP server -- runs `full`,
+which is the pipeline described above. `lexical` and `hybrid` stop before the
+model so that "what does vector retrieval add" and "what does the LLM add" can
+be answered separately, and the arm is written onto the proposal so the answer
+can be reconstructed from the audit trail rather than from someone's memory of
+how they configured a run.
 """
 
 from __future__ import annotations
@@ -13,6 +21,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
+from typing import Literal
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
@@ -42,6 +51,12 @@ class TerminologyVersionNotLoaded(RuntimeError):
     """
 
 
+# The three things phase 3 compares. A vector-only arm is deliberately absent:
+# no production configuration would run it, so measuring it would spend
+# gold-set signal on a question nobody is asking.
+Arm = Literal["lexical", "hybrid", "full"]
+
+
 @dataclass(frozen=True)
 class MapOutcome:
     proposal: ProposalRow
@@ -49,6 +64,7 @@ class MapOutcome:
     rerank: RerankResult | None
     dropped_codes: list[str]
     gate: GateOutcome
+    arm: Arm
 
 
 def map_term(
@@ -64,6 +80,7 @@ def map_term(
     prompt: PromptSpec,
     origin: str = "api",
     requested_by: str | None = None,
+    arm: Arm = "full",
 ) -> MapOutcome:
     if target_system == "snomed":
         raise TerminologyLicenceRequired(
@@ -81,6 +98,7 @@ def map_term(
             "target_system": target_system,
             "terminology_version": terminology_version,
             "normalized_text": normalized.normalized,
+            "arm": arm,
         },
     )
 
@@ -93,6 +111,7 @@ def map_term(
         version=terminology_version,
         settings=settings,
         embedding_provider=embedding_provider,
+        include_vector=arm != "lexical",
     )
     candidates = found.candidates
     latency_ms_retrieval = found.latency_ms
@@ -131,7 +150,16 @@ def map_term(
         # not there invites a confident answer built from noise, which is the
         # failure this whole path exists to prevent. No call, no cost, no
         # opportunity.
+        #
+        # The gate runs identically in every arm, and fires identically. It is
+        # lexical-evidence-based today, which is an asymmetry between the arms;
+        # phase 3 reports it rather than compensating for it per arm, because a
+        # per-arm gate would make the arms incomparable. See ARCHITECTURE.md.
         status = "no_good_match"
+    elif arm != "full":
+        # The measurement arms stop here. `retrieval` is the answer being
+        # measured, so consulting the model would be measuring something else.
+        pass
     else:
         try:
             raw_result = llm_provider.rerank(normalized.normalized, candidates, prompt)
@@ -150,15 +178,25 @@ def map_term(
     latency_ms_rerank = _elapsed_ms(rerank_started)
 
     top = result.top if result is not None else None
-    suggested_code = None if status != "pending" or result is None or top is None else top.code
+    if arm == "full":
+        suggested_code = None if status != "pending" or result is None or top is None else top.code
+    else:
+        # Top-1 by the arm's own ordering: lexical rank for `lexical`, the RRF
+        # merge for `hybrid`. `rerank` stays null -- there was no rerank, and
+        # writing a record of one would be a fabrication in an audit table.
+        suggested_code = candidates[0].code if status == "pending" and candidates else None
 
     provider_kind = "fake" if llm_provider.provider_id == "fake" else "live"
     # A deterministic stand-in has no confidence to report. Its raw reply is
     # still stored verbatim in `rerank`; what is not stored is a number in the
     # column everything downstream reads as "the model's confidence" -- a number
     # in a screenshot travels without its caveat.
+    # Null for the measurement arms too: no model ran, so there is no confidence
+    # to report, and a number here would be read as one.
     model_confidence = (
-        None if suggested_code is None or top is None or provider_kind == "fake" else top.confidence
+        None
+        if arm != "full" or suggested_code is None or top is None or provider_kind == "fake"
+        else top.confidence
     )
 
     # ------------------------------------------------------------- audit row
@@ -188,6 +226,7 @@ def map_term(
         gate_fired=gate.fired,
         gate_values={**gate.values, "reason": gate.reason},
         origin=origin,
+        arm=arm,
         requested_by=requested_by,
     )
 
@@ -197,6 +236,7 @@ def map_term(
         rerank=result,
         dropped_codes=dropped,
         gate=gate,
+        arm=arm,
     )
 
 

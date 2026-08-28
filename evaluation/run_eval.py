@@ -74,6 +74,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--model", default=None, help="Overrides LLM_MODEL.")
     parser.add_argument("--embedding-provider", default=None, help="Overrides EMBEDDING_PROVIDER.")
     parser.add_argument(
+        "--arm",
+        choices=["lexical", "hybrid", "full"],
+        default="full",
+        help=(
+            "Which pipeline to measure. `lexical` is lexical retrieval only, "
+            "`hybrid` adds vector retrieval and the RRF merge, `full` adds the "
+            "LLM rerank. Neither `lexical` nor `hybrid` calls the model at all. "
+            "lexical vs hybrid answers what vector retrieval adds; hybrid vs "
+            "full answers what the LLM adds."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help=(
@@ -115,13 +127,19 @@ def main(argv: list[str] | None = None) -> int:
             "this script runs. The numbers below measure nothing about mapping\n"
             "quality. Do not publish them."
         )
-    if settings.llm_provider == "fake":
+    if args.arm == "full" and settings.llm_provider == "fake":
         warnings.append(
             "LLM provider is `fake`: a deterministic sort by lexical score, with\n"
             "no language understanding at all. This run measures the plumbing,\n"
             "not the mapping."
         )
-    if settings.embedding_provider == "fake":
+    if args.arm != "full" and settings.embedding_provider == "fake" and args.arm == "hybrid":
+        warnings.append(
+            "Embedding provider is `fake`: hashed character trigrams, not a\n"
+            "semantic model. The vector stage cannot match a paraphrase here,\n"
+            "so the `hybrid` arm cannot show what a real one would add."
+        )
+    if args.arm == "full" and settings.embedding_provider == "fake":
         warnings.append(
             "Embedding provider is `fake`: hashed character trigrams, not a\n"
             "semantic model. The vector stage cannot match a paraphrase here."
@@ -136,10 +154,22 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.dry_run:
         print("dry run: metrics only, no proposals will be written\n")
+    # The arm decides which of these actually ran, so say so rather than listing
+    # a model that was never called.
+    llm_line = (
+        f"llm={llm.provider_id}/{llm.model_id}"
+        if args.arm == "full"
+        else "llm=(not called: measurement arm)"
+    )
+    embeddings_line = (
+        f"embeddings={embeddings.provider_id}/{embeddings.model_id}"
+        if args.arm != "lexical"
+        else "embeddings=(not called: lexical arm)"
+    )
     print(
+        f"arm={args.arm}\n"
         f"gold={args.gold}  system={args.system}  version={args.version}\n"
-        f"llm={llm.provider_id}/{llm.model_id}  "
-        f"embeddings={embeddings.provider_id}/{embeddings.model_id}\n"
+        f"{llm_line}  {embeddings_line}\n"
         f"prompt={prompt.prompt_id}@{prompt.sha256[:12]}  run={run_id}\n"
     )
 
@@ -162,9 +192,17 @@ def main(argv: list[str] | None = None) -> int:
                 llm_provider=llm,
                 prompt=prompt,
                 origin="eval",
+                arm=args.arm,
             )
             proposal = outcome.proposal
-            ranked = [entry["code"] for entry in (proposal.rerank or {}).get("ranked", [])]
+            if args.arm == "full":
+                ranked = [entry["code"] for entry in (proposal.rerank or {}).get("ranked", [])]
+            else:
+                # No rerank ran, so the arm's own ordering is its ranking:
+                # lexical rank for `lexical`, the RRF merge for `hybrid`. The
+                # proposal's `rerank` column stays null -- this is a metric,
+                # not a record of something that happened.
+                ranked = [c["code"] for c in proposal.candidates]
             if args.dry_run:
                 # Roll the proposal back: the metrics are computed from the
                 # same objects either way, only the audit row is discarded.
@@ -181,6 +219,7 @@ def main(argv: list[str] | None = None) -> int:
                     latency_ms_rerank=proposal.latency_ms_rerank,
                     proposal_id=str(proposal.id),
                     note=(row.get("note") or "").strip(),
+                    arm=args.arm,
                 )
             )
         print(
@@ -208,6 +247,7 @@ def _write_misses(path: Path, misses: list[RowResult]) -> None:
         writer = csv.writer(handle)
         writer.writerow(
             [
+                "arm",
                 "term",
                 "expected_code",
                 "suggested_code",
@@ -223,6 +263,7 @@ def _write_misses(path: Path, misses: list[RowResult]) -> None:
         for miss in misses:
             writer.writerow(
                 [
+                    miss.arm,
                     miss.term,
                     miss.expected_code,
                     miss.suggested_code or "",
