@@ -1,0 +1,25 @@
+comparison,row_id,term,class,expected_code,before_arm,before_code,after_arm,after_code,verdict
+hybrid vs lexical,1,högt blodtryck,synonym,I10,lexical,I10,hybrid,I10,unchanged
+hybrid vs lexical,2,essentiell hypertoni,exact,I10,lexical,I10,hybrid,I10,unchanged
+hybrid vs lexical,3,hypertoni utan känd orsak,paraphrase,I10,lexical,I10,hybrid,I10,unchanged
+hybrid vs lexical,4,hypertensiv hjärtsjukdom med hjärtsvikt,distinction,I11.0,lexical,I11.0,hybrid,I11.0,unchanged
+hybrid vs lexical,5,hypertensiv hjärtsjukdom utan hjärtsvikt,distinction,I11.9,lexical,I11.9,hybrid,I11.9,unchanged
+hybrid vs lexical,6,hypertensiv njursjukdom med njursvikt,exact,I12.0,lexical,I12.0,hybrid,I12.0,unchanged
+hybrid vs lexical,7,sekundär hypertoni ospecificerad,granularity,I15.9,lexical,I15.9,hybrid,I15.9,unchanged
+hybrid vs lexical,8,renovaskulär hypertoni,exact,I15.0,lexical,I15.0,hybrid,I15.0,unchanged
+hybrid vs lexical,9,akut hjärtinfarkt,granularity,I21,lexical,I21,hybrid,I21,unchanged
+hybrid vs lexical,10,akut hjärtinfarkt ospecificerad,granularity,I21.9,lexical,I21.9,hybrid,I21.9,unchanged
+hybrid vs lexical,11,astma ospecificerad,exact,J45.9,lexical,J45.9,hybrid,J45.9,unchanged
+hybrid vs lexical,12,diabetes mellitus typ 2,exact,E11,lexical,E11,hybrid,E11,unchanged
+full vs hybrid,1,högt blodtryck,synonym,I10,hybrid,I10,full,I10,unchanged
+full vs hybrid,2,essentiell hypertoni,exact,I10,hybrid,I10,full,I10,unchanged
+full vs hybrid,3,hypertoni utan känd orsak,paraphrase,I10,hybrid,I10,full,I10,unchanged
+full vs hybrid,4,hypertensiv hjärtsjukdom med hjärtsvikt,distinction,I11.0,hybrid,I11.0,full,I11.0,unchanged
+full vs hybrid,5,hypertensiv hjärtsjukdom utan hjärtsvikt,distinction,I11.9,hybrid,I11.9,full,I11.9,unchanged
+full vs hybrid,6,hypertensiv njursjukdom med njursvikt,exact,I12.0,hybrid,I12.0,full,I12.0,unchanged
+full vs hybrid,7,sekundär hypertoni ospecificerad,granularity,I15.9,hybrid,I15.9,full,I15.9,unchanged
+full vs hybrid,8,renovaskulär hypertoni,exact,I15.0,hybrid,I15.0,full,I15.0,unchanged
+full vs hybrid,9,akut hjärtinfarkt,granularity,I21,hybrid,I21,full,I21,unchanged
+full vs hybrid,10,akut hjärtinfarkt ospecificerad,granularity,I21.9,hybrid,I21.9,full,I21.9,unchanged
+full vs hybrid,11,astma ospecificerad,exact,J45.9,hybrid,J45.9,full,J45.9,unchanged
+full vs hybrid,12,diabetes mellitus typ 2,exact,E11,hybrid,E11,full,E11,unchanged
