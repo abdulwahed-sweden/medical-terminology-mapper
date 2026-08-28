@@ -16,6 +16,7 @@ re-running this script.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 from pathlib import Path
 
@@ -42,6 +43,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--model", default=None, help="Overrides EMBEDDING_MODEL.")
     parser.add_argument("--batch-size", type=int, default=256)
+    parser.add_argument(
+        "--yes",
+        action="store_true",
+        help=(
+            "Proceed without confirming. Required when the provider is not "
+            "`fake`, because that run costs money."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = get_settings()
@@ -76,6 +85,24 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 1
+
+        # A live provider charges per request. Embedding a full release is a
+        # five-figure row count, and the mistake that gets made is embedding the
+        # wrong (system, version) or re-embedding one that is already done. A
+        # keystroke is cheaper than a bill.
+        if provider.provider_id != "fake" and not args.yes:
+            batches = math.ceil(len(concepts) / args.batch_size)
+            print(
+                f"\nThis will send {len(concepts)} concepts to "
+                f"{provider.provider_id}/{provider.model_id} "
+                f"in about {batches} request(s), and it will be charged to the "
+                f"configured account.\n"
+                f"  system  {args.system}\n"
+                f"  version {args.version}\n"
+                f"\nRe-run with --yes to proceed.",
+                file=sys.stderr,
+            )
+            return 3
 
         session.execute(
             sa.delete(ConceptEmbeddingRow).where(
