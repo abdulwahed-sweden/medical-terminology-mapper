@@ -183,6 +183,20 @@ cython_debug/
 # Evaluation run artefacts (per-run misses CSVs)
 evaluation/gold/*_misses_*.csv
 
+# Benchmark run directories. A real run is a measurement of a particular
+# database at a particular moment; it belongs to whoever ran it, not to the
+# repository.
+#
+# `evaluation/runs/*` and not `evaluation/runs/`: with the trailing-slash form
+# git does not descend into the directory at all, so the negation below could
+# never take effect and the committed rehearsal would silently vanish from the
+# working tree's index. Same trap as the sample_*.csv negation further down.
+evaluation/runs/*
+
+# ...except the committed rehearsal, which is a worked example of the machinery
+# with fake providers, not a result.
+!evaluation/runs/rehearsal/
+
 # ---------------------------------------------------------------------------
 # Terminology distribution files must never be committed.
 #

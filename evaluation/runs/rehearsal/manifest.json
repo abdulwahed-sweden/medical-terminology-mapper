@@ -1,0 +1,73 @@
+{
+  "run_id": "rehearsal",
+  "run_kind": "rehearsal",
+  "timestamp_utc": "2026-08-28T11:34:55+00:00",
+  "git_sha": "5e282cb6415574b237e98e5900d97fe0a01b57e4",
+  "dataset": {
+    "path": "evaluation/gold/sample_icd10se.csv",
+    "sha256": "658f1ae3adb23fa850133494698baca24c66008a5e7f8d00e7520b82d745347a",
+    "total_rows": 12,
+    "eligible_rows": 12,
+    "excluded_rows": 0,
+    "excluded_by_reason": {},
+    "class_counts": {
+      "distinction": 2,
+      "exact": 5,
+      "granularity": 3,
+      "paraphrase": 1,
+      "synonym": 1
+    }
+  },
+  "terminology": {
+    "system": "icd10se",
+    "version": "2026-sample",
+    "fingerprint": {
+      "concept_count": 27,
+      "sha256": "89614bf09595650577b14a7b5d7b669c41de896331eca4954c16d9913b718463"
+    }
+  },
+  "arms": {
+    "lexical": "lexical retrieval only; no vector stage; no LLM call",
+    "hybrid": "lexical + vector retrieval, RRF merged; no LLM call",
+    "full": "lexical + vector retrieval, RRF merged, then LLM rerank"
+  },
+  "providers": {
+    "llm": {
+      "kind": "fake",
+      "provider": "fake",
+      "model": "fake-rerank-v1"
+    },
+    "embeddings": {
+      "kind": "fake",
+      "provider": "fake",
+      "model": "fake-hash-v1",
+      "dimension": 1536
+    },
+    "fake_providers": [
+      "llm",
+      "embeddings"
+    ]
+  },
+  "prompt": {
+    "id": "rerank_v1",
+    "sha256": "0d10a74f8553ffca928bd60aa5eb89cadd2e762631a784aaf9d4c66908f23965"
+  },
+  "gate": {
+    "id": "lexical_evidence",
+    "version": "2",
+    "configuration": {
+      "gate_min_ts_rank": 0.0,
+      "gate_min_strict_similarity": 0.6,
+      "gate_min_query_chars": 3,
+      "gate_vector_floors": {}
+    }
+  },
+  "retrieval": {
+    "lexical_top_k": 20,
+    "vector_top_k": 20,
+    "rerank_candidate_cap": 15,
+    "trigram_threshold": 0.45,
+    "index_descriptions": true,
+    "rrf_k": 60
+  }
+}

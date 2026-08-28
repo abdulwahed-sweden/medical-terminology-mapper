@@ -38,13 +38,28 @@ from evaluation.metrics import RowResult, format_summary, summarize
 SAMPLE_MARKER = "SAMPLE ONLY"
 
 
-def read_gold(path: Path) -> list[dict[str, str]]:
-    """Read a gold CSV, skipping `#` comment lines."""
+def read_gold(path: Path, *, allow_negative: bool = False) -> list[dict[str, str]]:
+    """Read a gold CSV, skipping `#` comment lines.
+
+    Every row gets a `row_id`: its 1-based position among the data rows, which
+    is what pairs an arm's result with the same row in another arm. Line number
+    is enough -- a gold set is frozen once it is used, so positions are stable
+    -- and it is recorded in the manifest so a reader can find the row again.
+
+    `allow_negative` permits an empty `expected_code`, which is how a row states
+    that the correct outcome is *no code*. `run_eval.py` does not use those
+    rows; `evaluation/benchmark.py` does, because a benchmark that cannot
+    measure false positives is measuring half the problem.
+    """
     with path.open("r", encoding="utf-8", newline="") as handle:
         lines = [line for line in handle if not line.lstrip().startswith("#")]
     rows = list(csv.DictReader(lines))
+    required = (
+        ("term", "target_system") if allow_negative else ("term", "target_system", "expected_code")
+    )
     for index, row in enumerate(rows, start=1):
-        for column in ("term", "target_system", "expected_code"):
+        row["row_id"] = str(index)
+        for column in required:
             if not (row.get(column) or "").strip():
                 raise SystemExit(f"{path}: row {index} has no {column}")
     return rows
