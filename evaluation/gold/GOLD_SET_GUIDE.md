@@ -53,10 +53,75 @@ Aggregate numbers do not leave the evaluation report. The README states no
 accuracy figures, and that does not change when there is finally a number to
 state — the report is where a number can be read next to what produced it.
 
+## Two columns, not one — `phrasing` and `target`
+
+**Proposed for v1. Not yet implemented: the orchestrator still reads a single
+`class` column.** Adopting this costs one change in `evaluation/benchmark.py`
+(read two columns, group by each) and a second table in the report. It is much
+cheaper now than after 200 rows have been curated against the wrong shape.
+
+The single `class` column conflates two independent things:
+
+- **`phrasing`** — how the input is written: `exact`, `synonym`, `paraphrase`,
+  `misspelling`, `abbreviation`. This is what separates lexical retrieval from
+  embeddings.
+- **`target`** — what the correct answer demands: `plain`, `distinction`,
+  `granularity`, `negative`. This is what separates a system that finds the
+  right *area* from one that picks the right *code*.
+
+A row has both. They vary independently, and collapsing them loses information
+in the direction that matters.
+
+The sample set shows the cost concretely. Ten of its twelve terms are literally
+the published preferred term, yet under one column only three rows are labelled
+`exact`, because the other seven were labelled for the trap they spring:
+
+| term | one column | `phrasing` | `target` |
+| --- | --- | --- | --- |
+| essentiell hypertoni | `exact` | `exact` | `plain` |
+| hypertensiv hjärtsjukdom **med** hjärtsvikt | `distinction` | `exact` | `distinction` |
+| hypertensiv njursjukdom **med** njursvikt | `distinction` | `exact` | `distinction` |
+| astma ospecificerad | `granularity` | `exact` | `granularity` |
+| akut hjärtinfarkt (→ I21, a category) | `granularity` | `exact` | `granularity` |
+| högt blodtryck | `synonym` | `synonym` | `plain` |
+| hypertoni utan känd orsak | `paraphrase` | `paraphrase` | `plain` |
+
+Read the one-column result and you would conclude plain exact matching was
+tested three times. It was tested ten times. At twelve rows that is cosmetic; at
+a hundred rows per system with per-class breakdowns it is a reporting defect,
+and it biases the reader in the direction of thinking the easy case is
+under-covered when it is the best-covered thing in the set.
+
+The two-column form also answers questions one column cannot:
+
+- *Does the vector arm help on paraphrases specifically?* — group by `phrasing`.
+- *Do all three arms fail the same way on `med`/`utan` pairs, whatever the
+  phrasing?* — group by `target`.
+- *Is the abbreviation problem a retrieval problem or a granularity problem?* —
+  the cross-tab.
+
+### Coverage requirement, restated
+
+The v1 floor becomes a requirement on **both** columns: every `phrasing` value
+present with at least 10 rows, and every `target` value present with at least 10
+rows. They do not need to be crossed exhaustively — 5 phrasings × 4 targets at
+10 rows each would be 200 rows per system before anything else — but a
+`phrasing` or `target` value with no rows fails the run, exactly as an empty
+class does today.
+
+`negative` rows (expected outcome: no code) carry a `phrasing` like any other
+row: a misspelled term with no correct code is a different test from a
+well-formed one with no correct code, and the gate should be measured on both.
+
+---
+
 ## Term diversity
 
-Every row carries its class, so results can be broken down by it. The classes,
-and what each is for:
+Every row carries its class, so results can be broken down by it. The classes
+below are the single-column form, which the sample set and the current
+orchestrator use; the split above is what v1 should adopt. `distinction`,
+`granularity` and `no_good_match` become `target` values, the rest `phrasing`
+values.
 
 | Class | What it is | Why it belongs |
 | --- | --- | --- |
@@ -78,19 +143,33 @@ are nominal.
 
 `sample_icd10se.csv`, 12 rows, all ICD-10-SE, chapters 4, 9 and 10:
 
+Labels were assigned mechanically, then reviewed against the fixture's own
+hierarchy. The rule: classify by the trap the row can spring — a distractor that
+exists in the terminology and plausibly shares the term's wording — not by
+whether a partner row happens to be in this file.
+
 | Class | Rows | |
 | --- | --- | --- |
-| `exact` | 1 | `essentiell hypertoni` |
-| `synonym` | 1 | `högt blodtryck` |
+| `granularity` | 4 | `I21` (a category) / `I21.9`, `I15.9`, `J45.9` |
+| `distinction` | 3 | `I11.0` / `I11.9`, `I12.0` |
+| `exact` | 3 | `essentiell hypertoni`, `renovaskulär hypertoni`, `diabetes mellitus typ 2` |
 | `paraphrase` | 1 | `hypertoni utan känd orsak` |
-| `distinction` | 2 | `I11.0` / `I11.9` |
-| `granularity` | 3 | `I21` / `I21.9`, `I15.9` |
-| remainder | 4 | close to their preferred terms |
+| `synonym` | 1 | `högt blodtryck` |
 | `misspelling` | **0** | |
 | `abbreviation` | **0** | |
 | `no_good_match` | **0** | |
 
-So three of the eight classes are absent entirely, one code system is absent
+Read that table with the split above in mind: **ten of the twelve terms are
+literally the published preferred term**, so the three rows labelled `exact`
+badly understate how much plain exact matching this set actually exercises. That
+is the reporting defect the two-column form fixes.
+
+`akut hjärtinfarkt` → `I21` is the strongest row here and the only one of its
+kind: `I21` is a **non-leaf** code that is nonetheless assignable, so the row
+tests whether the system respects assignability rather than reaching for the
+more specific-looking `I21.9`.
+
+Three of the eight classes are absent entirely, one code system is absent
 entirely, and the candidate pool is 25 concepts rather than roughly 39 000. The
 two classes most likely to separate the three arms — misspellings and
 abbreviations — are exactly the two with no rows. It is a fixture that keeps the
@@ -104,10 +183,16 @@ Same columns as `TEMPLATE.csv`, plus one:
 | --- | --- |
 | `term` | The input, as it would be typed |
 | `target_system` | `icd10se` or `kva` |
-| `expected_code` | The correct code, or empty for `no_good_match` |
-| `class` | One of the classes above — **new**, and required |
+| `expected_code` | The correct code, or empty for a negative row |
+| `class` | Single-column form: one of the classes above. Required today. |
+| `phrasing` | *Proposed for v1* — `exact`, `synonym`, `paraphrase`, `misspelling`, `abbreviation` |
+| `target` | *Proposed for v1* — `plain`, `distinction`, `granularity`, `negative` |
 | `source` | The official publication and section the code was read from |
 | `note` | Why this row is hard, or what it distinguishes |
+
+Until the two-column form is implemented, `class` is the one the tooling reads.
+A file carrying all three is not ambiguous — `class` wins — but it is a sign the
+split was specified and never finished.
 
 `source` is not bureaucracy. A gold set whose provenance cannot be checked is an
 opinion, and a figure computed from it inherits that.
