@@ -1,21 +1,26 @@
 {
   "run_id": "rehearsal",
   "run_kind": "rehearsal",
-  "timestamp_utc": "2026-08-28T22:15:45+00:00",
-  "git_sha": "34f81a587d8f7c7584ce608a035e10e2544f6cf3",
+  "timestamp_utc": "2026-08-28T22:36:24+00:00",
+  "git_sha": "b20366ea02ac5e5874362e05c82cbe2a8e222d71",
   "dataset": {
     "path": "evaluation/gold/sample_icd10se.csv",
-    "sha256": "d83230ba02d4009d719df4f65b01782adf568cf44317d8eb08d030957ac4838d",
+    "sha256": "c0221ddacc0dcd8b3fe896b576647056b2a3ef452685e274641bb503bacea06e",
     "total_rows": 12,
     "eligible_rows": 12,
     "excluded_rows": 0,
     "excluded_by_reason": {},
-    "class_counts": {
-      "distinction": 3,
-      "exact": 3,
-      "granularity": 4,
-      "paraphrase": 1,
-      "synonym": 1
+    "label_counts": {
+      "phrasing": {
+        "exact": 10,
+        "paraphrase": 1,
+        "synonym": 1
+      },
+      "target": {
+        "distinction": 3,
+        "granularity": 4,
+        "plain": 5
+      }
     }
   },
   "terminology": {

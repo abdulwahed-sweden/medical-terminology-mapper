@@ -1,1 +1,1 @@
-row_id,arm,term,class,expected_code,suggested_code,status,correct,expected_rank,top3,failure,matched_field,gate_fired,gate_reason,candidate_codes,ranked_codes,proposal_id,gate_values
+row_id,arm,term,phrasing,target,expected_code,suggested_code,status,correct,expected_rank,top3,failure,matched_field,gate_fired,gate_reason,candidate_codes,ranked_codes,proposal_id,gate_values

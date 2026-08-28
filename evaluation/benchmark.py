@@ -44,6 +44,23 @@ ARMS: tuple[Arm, ...] = ("lexical", "hybrid", "full")
 
 UNCLASSIFIED = "unclassified"
 
+# Two label dimensions, deliberately not one. `phrasing` is how the input is
+# written; `target` is what the correct answer demands. They vary
+# independently -- a row can be the published preferred term (phrasing=exact)
+# and still test a med/utan pair (target=distinction) -- and collapsing them
+# loses information in the direction that matters: the sample set is ten
+# preferred terms out of twelve, but under a single column only three rows
+# read as `exact`, so the report understated the best-covered case in it.
+DIMENSIONS = ("phrasing", "target")
+
+# Legacy single-column files. `class` values that name a phrasing map straight
+# across; the rest name a target.
+LEGACY_TARGETS = {
+    "distinction": "distinction",
+    "granularity": "granularity",
+    "no_good_match": "negative",
+}
+
 # Exclusion reasons. Both are taxonomy entries 1 and 2; they are decided before
 # any arm runs, so they never appear as an arm's failure.
 DATA_PROBLEM = "evaluation_data_problem"
@@ -65,10 +82,14 @@ class GoldRow:
     term: str
     target_system: str
     expected_code: str
-    case_class: str
+    phrasing: str
+    target: str
     source: str
     note: str
     version: str = ""
+
+    def label(self, dimension: str) -> str:
+        return self.phrasing if dimension == "phrasing" else self.target
 
     @property
     def is_negative(self) -> bool:
@@ -89,7 +110,8 @@ class ArmResult:
     row_id: int
     arm: str
     term: str
-    case_class: str
+    phrasing: str
+    target: str
     expected_code: str
     suggested_code: str | None
     status: str
@@ -101,6 +123,9 @@ class ArmResult:
     gate_values: dict[str, Any]
     proposal_id: str
     rerank_is_null: bool
+
+    def label(self, dimension: str) -> str:
+        return self.phrasing if dimension == "phrasing" else self.target
 
     @property
     def is_negative(self) -> bool:
@@ -167,7 +192,15 @@ def parse_gold_rows(raw: list[dict[str, str]]) -> tuple[list[GoldRow], list[Excl
         term = (entry.get("term") or "").strip()
         system = (entry.get("target_system") or "").strip()
         expected = (entry.get("expected_code") or "").strip()
-        case_class = (entry.get("class") or "").strip() or UNCLASSIFIED
+        phrasing = (entry.get("phrasing") or "").strip()
+        target = (entry.get("target") or "").strip()
+        if not phrasing and not target:
+            # A single-column file from before the split. A `class` naming a
+            # trap tells us the target and nothing about the phrasing; saying
+            # `unclassified` is honest, where guessing `exact` would not be.
+            legacy = (entry.get("class") or "").strip()
+            target = LEGACY_TARGETS.get(legacy, "plain" if legacy else UNCLASSIFIED)
+            phrasing = UNCLASSIFIED if legacy in LEGACY_TARGETS else (legacy or UNCLASSIFIED)
 
         if not term or not system:
             excluded.append(Excluded(row_id, term, expected, DATA_PROBLEM))
@@ -178,7 +211,8 @@ def parse_gold_rows(raw: list[dict[str, str]]) -> tuple[list[GoldRow], list[Excl
                 term=term,
                 target_system=system,
                 expected_code=expected,
-                case_class=case_class,
+                phrasing=phrasing or UNCLASSIFIED,
+                target=target or UNCLASSIFIED,
                 source=(entry.get("source") or "").strip(),
                 note=(entry.get("note") or "").strip(),
                 version=(entry.get("version") or "").strip(),
@@ -282,7 +316,8 @@ def run_arm(
                     row_id=row.row_id,
                     arm=arm,
                     term=row.term,
-                    case_class=row.case_class,
+                    phrasing=row.phrasing,
+                    target=row.target,
                     expected_code=row.expected_code,
                     suggested_code=proposal.suggested_code,
                     status=proposal.status,
@@ -320,7 +355,8 @@ def _matched_field(candidates: list[dict[str, Any]], expected: str) -> str | Non
 class PairedChange:
     row_id: int
     term: str
-    case_class: str
+    phrasing: str
+    target: str
     expected_code: str
     comparison: str
     before_arm: str
@@ -346,7 +382,8 @@ def pair(before: list[ArmResult], after: list[ArmResult], label: str) -> list[Pa
             PairedChange(
                 row_id=later.row_id,
                 term=later.term,
-                case_class=later.case_class,
+                phrasing=later.phrasing,
+                target=later.target,
                 expected_code=later.expected_code,
                 comparison=label,
                 before_arm=earlier.arm,
@@ -361,20 +398,22 @@ def pair(before: list[ArmResult], after: list[ArmResult], label: str) -> list[Pa
 
 @dataclass
 class ClassRow:
-    case_class: str
+    label: str
     n: int
     per_arm: dict[str, tuple[float, float]] = field(default_factory=dict)
 
 
-def per_class(results: dict[str, list[ArmResult]], classes: list[str]) -> list[ClassRow]:
-    """One table row per class. A class present in the gold set but empty here
-    is a bug in the run, not a zero -- the caller raises on it."""
+def per_class(
+    results: dict[str, list[ArmResult]], labels: list[str], *, dimension: str
+) -> list[ClassRow]:
+    """One table row per label, along one dimension. A label present in the gold
+    set but empty here is a bug in the run, not a zero -- the caller raises."""
     table: list[ClassRow] = []
-    for case_class in classes:
-        rows = [r for r in results[ARMS[0]] if r.case_class == case_class]
-        entry = ClassRow(case_class=case_class, n=len(rows))
+    for label in labels:
+        rows = [r for r in results[ARMS[0]] if r.label(dimension) == label]
+        entry = ClassRow(label=label, n=len(rows))
         for arm in ARMS:
-            arm_rows = [r for r in results[arm] if r.case_class == case_class]
+            arm_rows = [r for r in results[arm] if r.label(dimension) == label]
             total = len(arm_rows)
             top1 = sum(r.correct for r in arm_rows) / total if total else 0.0
             top3 = sum(r.top3 for r in arm_rows) / total if total else 0.0
@@ -435,7 +474,6 @@ def build_manifest(
     total_rows: int,
     eligible: list[GoldRow],
     excluded: list[Excluded],
-    classes: list[str],
     system: str,
     version: str,
     fingerprint: dict[str, Any],
@@ -448,7 +486,13 @@ def build_manifest(
     for row in excluded:
         excluded_by_reason[row.reason] = excluded_by_reason.get(row.reason, 0) + 1
 
-    class_counts = {c: sum(1 for r in eligible if r.case_class == c) for c in classes}
+    label_counts = {
+        dimension: {
+            label: sum(1 for r in eligible if r.label(dimension) == label)
+            for label in sorted({r.label(dimension) for r in eligible})
+        }
+        for dimension in DIMENSIONS
+    }
     fake_providers = [
         name
         for name, provider_id in (
@@ -470,7 +514,7 @@ def build_manifest(
             "eligible_rows": len(eligible),
             "excluded_rows": len(excluded),
             "excluded_by_reason": excluded_by_reason,
-            "class_counts": class_counts,
+            "label_counts": label_counts,
         },
         "terminology": {
             "system": system,
@@ -552,7 +596,7 @@ def render_report(
     *,
     manifest: dict[str, Any],
     results: dict[str, list[ArmResult]],
-    classes: list[str],
+    labels: dict[str, list[str]],
     excluded: list[Excluded],
     paired: list[PairedChange],
 ) -> str:
@@ -561,12 +605,17 @@ def render_report(
     run_kind = manifest["run_kind"]
     heading = REHEARSAL_MARKER if run_kind == "rehearsal" else "FORMAL RUN"
 
-    table = per_class(results, classes)
-    empty = [row.case_class for row in table if row.n == 0]
+    tables = {d: per_class(results, labels[d], dimension=d) for d in DIMENSIONS}
+    empty = [
+        f"{dimension}={row.label}"
+        for dimension in DIMENSIONS
+        for row in tables[dimension]
+        if row.n == 0
+    ]
     if empty:
         raise EmptyClassError(
-            f"classes present in {dataset['path']} produced no eligible rows: "
-            f"{', '.join(sorted(empty))}. A benchmark that silently drops a class "
+            f"labels present in {dataset['path']} produced no eligible rows: "
+            f"{', '.join(sorted(empty))}. A benchmark that silently drops a label "
             f"reports on a dataset nobody chose."
         )
 
@@ -616,29 +665,43 @@ def render_report(
         "",
     ]
 
-    # --- A. per class, first ------------------------------------------------
+    # --- A. per label, first ------------------------------------------------
     out += [
-        "## A. By case class",
+        "## A. By label",
         "",
-        "Per-class first, deliberately. An aggregate over a hand-chosen class mix",
+        "Per-label first, deliberately. An aggregate over a hand-chosen mix",
         "describes the mix as much as the system.",
         "",
-        "| class | n | | lexical | hybrid | full |",
-        "| --- | ---: | --- | --- | --- | --- |",
-    ]
-    for row in table:
-        low = "  **LOW N**" if row.n < LOW_N else ""
-        out.append(
-            f"| **{row.case_class}**{low} | {row.n} | Top-1 | "
-            + " | ".join(_pct(row.per_arm[a][0], row.n) for a in ARMS)
-            + " |"
-        )
-        out.append(
-            "| | | Top-3 | " + " | ".join(_pct(row.per_arm[a][1], row.n) for a in ARMS) + " |"
-        )
-    out += [
+        "Two dimensions, because they vary independently: **phrasing** is how the",
+        "input is written, **target** is what the correct answer demands. A row",
+        "can be the published preferred term and still test a med/utan pair, and",
+        "reading only one of these would hide that.",
         "",
-        f"`LOW N` marks any class with fewer than {LOW_N} rows. At those sizes a",
+    ]
+    titles = {
+        "phrasing": "### A1. By phrasing — how the input is written",
+        "target": "### A2. By target — what the answer demands",
+    }
+    for dimension in DIMENSIONS:
+        out += [
+            titles[dimension],
+            "",
+            f"| {dimension} | n | | lexical | hybrid | full |",
+            "| --- | ---: | --- | --- | --- | --- |",
+        ]
+        for row in tables[dimension]:
+            low = "  **LOW N**" if row.n < LOW_N else ""
+            out.append(
+                f"| **{row.label}**{low} | {row.n} | Top-1 | "
+                + " | ".join(_pct(row.per_arm[a][0], row.n) for a in ARMS)
+                + " |"
+            )
+            out.append(
+                "| | | Top-3 | " + " | ".join(_pct(row.per_arm[a][1], row.n) for a in ARMS) + " |"
+            )
+        out.append("")
+    out += [
+        f"`LOW N` marks any label with fewer than {LOW_N} rows. At those sizes a",
         "single row moves the figure by several points; treat them as direction,",
         "not measurement.",
         "",
@@ -731,14 +794,15 @@ def render_report(
     misses = [(a, r) for a in ARMS for r in results[a] if not r.correct]
     if misses:
         out += [
-            "| arm | term | class | expected | suggested | rank | matched_field "
-            "| gate | category |",
+            "| arm | term | phrasing/target | expected | suggested | rank "
+            "| matched_field | gate | category |",
             "| --- | --- | --- | --- | --- | ---: | --- | --- | --- |",
         ]
         for arm, r in misses:
             rank = r.expected_rank
             out.append(
-                f"| {arm} | {r.term} | {r.case_class} | {r.expected_code or '*(none)*'} | "
+                f"| {arm} | {r.term} | {r.phrasing}/{r.target} | "
+                f"{r.expected_code or '*(none)*'} | "
                 f"{r.suggested_code or '*(none)*'} | {rank if rank else '–'} | "
                 f"{r.matched_field or '–'} | "
                 f"{'fired: ' + r.gate_reason if r.gate_fired else 'passed'} | `{r.failure}` |"

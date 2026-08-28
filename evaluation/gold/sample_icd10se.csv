@@ -30,16 +30,30 @@
 # No term, code, source or note has ever been changed, and no row was added
 # or removed. See GOLD_SET_GUIDE.md: this single column is superseded for the
 # v1 set by separate `phrasing` and `target` columns.
-term,target_system,expected_code,class,source,note
-högt blodtryck,icd10se,I10,synonym,"ICD-10-SE 2026 systematisk förteckning, kap. 9","""Högt blodtryck"" is an Innefattar term under I10, not its preferred term"
-essentiell hypertoni,icd10se,I10,exact,"ICD-10-SE 2026 systematisk förteckning, kap. 9",matches the preferred term directly
-hypertoni utan känd orsak,icd10se,I10,paraphrase,"ICD-10-SE 2026 systematisk förteckning, kap. 9",paraphrase of the parenthetical in the preferred term
-hypertensiv hjärtsjukdom med hjärtsvikt,icd10se,I11.0,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9","must not be confused with I11.9, the same disease without heart failure"
-hypertensiv hjärtsjukdom utan hjärtsvikt,icd10se,I11.9,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9","the ""utan"" is the whole distinction from I11.0"
-hypertensiv njursjukdom med njursvikt,icd10se,I12.0,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
-sekundär hypertoni ospecificerad,icd10se,I15.9,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",I15 is the category; the unspecified subcategory is the codable one
-renovaskulär hypertoni,icd10se,I15.0,exact,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
-akut hjärtinfarkt,icd10se,I21,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",the category itself; I21.9 is the unspecified subcategory
-akut hjärtinfarkt ospecificerad,icd10se,I21.9,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
-astma ospecificerad,icd10se,J45.9,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 10",
-diabetes mellitus typ 2,icd10se,E11,exact,"ICD-10-SE 2026 systematisk förteckning, kap. 4",
+#
+# Two label columns, not one. `phrasing` is how the input is written;
+# `target` is what the correct answer demands. They vary independently: most
+# rows here are the published preferred term (phrasing=exact) while still
+# testing a med/utan pair or a category/subcategory choice. Collapsing them
+# into one column made this file look as though exact matching was barely
+# covered, when it is the best-covered thing in it. See GOLD_SET_GUIDE.md.
+#
+# Labels were assigned mechanically and then reviewed against the fixture's
+# own hierarchy: a row's `target` is the trap it can spring, given a
+# distractor that exists in the terminology and plausibly shares its wording.
+#
+# No term, code, source or note has ever been changed, and no row was added
+# or removed.
+term,target_system,expected_code,phrasing,target,source,note
+högt blodtryck,icd10se,I10,synonym,plain,"ICD-10-SE 2026 systematisk förteckning, kap. 9","""Högt blodtryck"" is an Innefattar term under I10, not its preferred term"
+essentiell hypertoni,icd10se,I10,exact,plain,"ICD-10-SE 2026 systematisk förteckning, kap. 9",matches the preferred term directly
+hypertoni utan känd orsak,icd10se,I10,paraphrase,plain,"ICD-10-SE 2026 systematisk förteckning, kap. 9",paraphrase of the parenthetical in the preferred term
+hypertensiv hjärtsjukdom med hjärtsvikt,icd10se,I11.0,exact,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9","must not be confused with I11.9, the same disease without heart failure"
+hypertensiv hjärtsjukdom utan hjärtsvikt,icd10se,I11.9,exact,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9","the ""utan"" is the whole distinction from I11.0"
+hypertensiv njursjukdom med njursvikt,icd10se,I12.0,exact,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
+sekundär hypertoni ospecificerad,icd10se,I15.9,exact,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",I15 is the category; the unspecified subcategory is the codable one
+renovaskulär hypertoni,icd10se,I15.0,exact,plain,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
+akut hjärtinfarkt,icd10se,I21,exact,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",the category itself; I21.9 is the unspecified subcategory
+akut hjärtinfarkt ospecificerad,icd10se,I21.9,exact,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
+astma ospecificerad,icd10se,J45.9,exact,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 10",
+diabetes mellitus typ 2,icd10se,E11,exact,plain,"ICD-10-SE 2026 systematisk förteckning, kap. 4",

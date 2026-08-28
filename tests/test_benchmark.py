@@ -26,6 +26,7 @@ from app.llm.fake import FakeLLMProvider
 from evaluation.benchmark import (
     ARMS,
     CODE_NOT_PRESENT,
+    DIMENSIONS,
     REHEARSAL_MARKER,
     ArmResult,
     EmptyClassError,
@@ -120,7 +121,8 @@ def test_a_row_whose_expected_code_is_not_loaded_is_excluded_and_counted(
             "term": "något som inte finns",
             "target_system": SYSTEM,
             "expected_code": "Z99.9",
-            "class": "exact",
+            "phrasing": "exact",
+            "target": "plain",
             "source": "synthetic test row",
             "note": "",
         }
@@ -142,7 +144,8 @@ def test_negative_rows_are_eligible_without_an_expected_code(
             "term": "banan",
             "target_system": SYSTEM,
             "expected_code": "",
-            "class": "no_good_match",
+            "phrasing": "exact",
+            "target": "negative",
             "source": "synthetic test row",
             "note": "",
         }
@@ -161,7 +164,8 @@ def test_the_negative_row_rule(db_session: Session, factory, icd10se_embedded: s
             "term": "banan",
             "target_system": SYSTEM,
             "expected_code": "",
-            "class": "no_good_match",
+            "phrasing": "exact",
+            "target": "negative",
             "source": "synthetic test row",
             "note": "",
         }
@@ -183,7 +187,8 @@ def test_paired_comparison_classifies_all_three_verdicts() -> None:
             row_id=row_id,
             arm=arm,
             term="t",
-            case_class="exact",
+            phrasing="exact",
+            target="plain",
             expected_code="I10",
             suggested_code=suggested,
             status="pending",
@@ -216,7 +221,8 @@ def test_the_negative_rule_holds_in_the_paired_comparison() -> None:
             row_id=row_id,
             arm=arm,
             term="banan",
-            case_class="no_good_match",
+            phrasing="exact",
+            target="negative",
             expected_code="",
             suggested_code=suggested,
             status=status,
@@ -244,10 +250,13 @@ def test_a_class_that_produces_no_rows_fails_loudly(
     results = _run_all(factory, eligible, icd10se_embedded)
     manifest = _manifest(db_session, eligible, excluded, icd10se_embedded)
 
-    classes = sorted({row.case_class for row in eligible} | {"abbreviation"})
+    labels = {
+        "phrasing": sorted({row.phrasing for row in eligible} | {"abbreviation"}),
+        "target": sorted({row.target for row in eligible}),
+    }
     with pytest.raises(EmptyClassError, match="abbreviation"):
         render_report(
-            manifest=manifest, results=results, classes=classes, excluded=excluded, paired=[]
+            manifest=manifest, results=results, labels=labels, excluded=excluded, paired=[]
         )
 
 
@@ -260,7 +269,6 @@ def _manifest(session: Session, eligible, excluded, version: str):  # type: igno
         total_rows=len(eligible) + len(excluded),
         eligible=eligible,
         excluded=excluded,
-        classes=sorted({row.case_class for row in eligible}),
         system=SYSTEM,
         version=version,
         fingerprint=terminology_fingerprint(session, system=SYSTEM, version=version),
@@ -298,7 +306,7 @@ def test_the_manifest_carries_every_required_field(
         "eligible_rows",
         "excluded_rows",
         "excluded_by_reason",
-        "class_counts",
+        "label_counts",
     ):
         assert key in manifest["dataset"], key
     assert set(manifest["arms"]) == set(ARMS)
@@ -308,6 +316,11 @@ def test_the_manifest_carries_every_required_field(
         manifest["gate"]["configuration"]["gate_min_query_chars"] == SETTINGS.gate_min_query_chars
     )
     assert manifest["retrieval"]["rrf_k"] == SETTINGS.rrf_k
+    # Both dimensions counted, separately. The sample is ten preferred terms out
+    # of twelve, which a single column reported as three.
+    assert set(manifest["dataset"]["label_counts"]) == set(DIMENSIONS)
+    assert manifest["dataset"]["label_counts"]["phrasing"]["exact"] == 10
+    assert manifest["dataset"]["label_counts"]["target"]["plain"] == 5
 
 
 def test_the_dataset_hash_is_stable_across_two_reads() -> None:
@@ -321,11 +334,11 @@ def test_the_report_never_prints_a_percentage_without_its_n(
 
     _, eligible, excluded = _eligible(db_session, icd10se_embedded)
     results = _run_all(factory, eligible, icd10se_embedded)
-    classes = sorted({row.case_class for row in eligible})
+    labels = {d: sorted({row.label(d) for row in eligible}) for d in DIMENSIONS}
     report = render_report(
         manifest=_manifest(db_session, eligible, excluded, icd10se_embedded),
         results=results,
-        classes=classes,
+        labels=labels,
         excluded=excluded,
         paired=pair(results["lexical"], results["hybrid"], "hybrid vs lexical"),
     )
@@ -348,6 +361,52 @@ def test_measurement_arms_store_no_rerank(
 
     assert all(r.rerank_is_null for r in results["lexical"])
     assert all(r.rerank_is_null for r in results["hybrid"])
+
+
+def test_a_legacy_single_column_file_still_parses() -> None:
+    """Gold files written before the split still load.
+
+    A `class` naming a trap tells us the target and nothing about the phrasing,
+    so the phrasing is recorded as unclassified rather than guessed as `exact` --
+    guessing is how a file quietly acquires labels nobody assigned.
+    """
+    legacy = [
+        {
+            "row_id": "1",
+            "term": "a",
+            "target_system": SYSTEM,
+            "expected_code": "I10",
+            "class": "synonym",
+            "source": "s",
+            "note": "",
+        },
+        {
+            "row_id": "2",
+            "term": "b",
+            "target_system": SYSTEM,
+            "expected_code": "I11.0",
+            "class": "distinction",
+            "source": "s",
+            "note": "",
+        },
+        {
+            "row_id": "3",
+            "term": "c",
+            "target_system": SYSTEM,
+            "expected_code": "",
+            "class": "no_good_match",
+            "source": "s",
+            "note": "",
+        },
+    ]
+    rows, malformed = parse_gold_rows(legacy)
+
+    assert not malformed
+    assert [(r.phrasing, r.target) for r in rows] == [
+        ("synonym", "plain"),
+        ("unclassified", "distinction"),
+        ("unclassified", "negative"),
+    ]
 
 
 # --------------------------------------------------------- the committed rehearsal
