@@ -13,13 +13,13 @@
 | | |
 | --- | --- |
 | run | `rehearsal` |
-| date (UTC) | 2026-08-28T22:36:24+00:00 |
-| git SHA | `b20366ea02ac5e5874362e05c82cbe2a8e222d71` |
+| date (UTC) | 2026-08-28T23:00:54+00:00 |
+| git SHA | `15d396f3accd5514c49b1670dc9a1ad32fa17d8f` |
 | system / version | icd10se / 2026-sample |
 | terminology fingerprint | 27 concepts, `89614bf095956505…` |
 | gold set | `sample_icd10se.csv` |
 | gold rows | 12 total, 12 eligible, 0 excluded |
-| gold SHA-256 | `c0221ddacc0dcd8b3fe896b576647056b2a3ef452685e274641bb503bacea06e` |
+| gold SHA-256 | `993c0d1ce1f11302990c38dd4f9c9af35c74fa14d54aedf7f00dd48fdbc83dde` |
 | LLM | fake: fake/fake-rerank-v1 |
 | embeddings | fake: fake/fake-hash-v1 (1536d) |
 | prompt | rerank_v1 @ `0d10a74f8553` |

@@ -1,2 +1,13 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Line endings are provenance here, not style.
+#
+# `manifest.json` records a SHA-256 of the gold CSV it was run against, and the
+# report is meant to be reproducible from that hash. When a file is written with
+# CRLF and git normalises it to LF on commit, the committed manifest and the
+# committed dataset no longer agree -- silently, and in a way that makes a
+# correct provenance check look like tampering. It happened once already.
+#
+# So the bytes on disk are the bytes in the object database.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.xlsx binary

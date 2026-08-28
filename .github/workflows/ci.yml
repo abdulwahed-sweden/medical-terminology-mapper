@@ -55,7 +55,7 @@ jobs:
         run: ruff format --check .
 
       - name: Type-check
-        run: mypy app/ mcp_server/ evaluation/
+        run: mypy app/ mcp_server/ evaluation/ scripts/
 
       - name: Test
         # No API keys are configured, so the live provider smoke tests skip and

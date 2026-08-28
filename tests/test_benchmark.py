@@ -428,6 +428,26 @@ def test_the_rehearsal_is_marked_as_not_a_quality_result() -> None:
     assert manifest["providers"]["fake_providers"]
 
 
+def test_the_rehearsal_manifest_matches_the_dataset_it_names() -> None:
+    """The committed manifest and the committed gold file must agree.
+
+    This is the whole promise of the manifest: the report is reproducible from
+    it plus the repository at the recorded SHA. It has already been broken once
+    without anyone noticing -- the CSV was written with CRLF, the manifest
+    hashed the CRLF bytes, and git normalised the file to LF on commit, so the
+    committed pair disagreed while both looked fine on their own.
+    """
+    manifest = json.loads((REHEARSAL / "manifest.json").read_text(encoding="utf-8"))
+    gold = SAMPLE_GOLD
+
+    assert Path(manifest["dataset"]["path"]).name == gold.name
+    assert sha256_file(gold) == manifest["dataset"]["sha256"], (
+        f"{gold.name} hashes to {sha256_file(gold)} but the committed manifest "
+        f"claims {manifest['dataset']['sha256']}. Regenerate the rehearsal."
+    )
+    assert manifest["dataset"]["total_rows"] == len(read_gold(gold, allow_negative=True))
+
+
 def test_the_rehearsal_contains_every_artefact() -> None:
     for name in (
         "manifest.json",

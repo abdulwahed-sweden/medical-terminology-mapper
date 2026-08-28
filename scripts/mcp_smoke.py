@@ -15,15 +15,34 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+from typing import Any
 
 from mcp import Client
+from mcp.types import TextContent
 
 from mcp_server.server import build_server
 
 
+def _payload(result: object) -> dict[str, Any]:
+    """Read a tool's JSON payload out of its first content block.
+
+    A tool result can carry images, audio or resource links; ours carry one
+    block of JSON text. Asserting that rather than reaching for `.text` and
+    hoping keeps the type checker honest and turns a protocol change into a
+    clear failure instead of an AttributeError.
+    """
+    content = getattr(result, "content", [])
+    if not content or not isinstance(content[0], TextContent):
+        raise SystemExit(f"expected a text content block, got: {content!r}")
+    parsed = json.loads(content[0].text)
+    if not isinstance(parsed, dict):
+        raise SystemExit(f"expected a JSON object, got: {parsed!r}")
+    return parsed
+
+
 async def _run() -> int:
     async with Client(build_server()) as client:
-        listed = json.loads((await client.call_tool("list_terminologies", {})).content[0].text)
+        listed = _payload(await client.call_tool("list_terminologies", {}))
         if not listed.get("ok"):
             print(f"list_terminologies failed: {listed}", file=sys.stderr)
             return 1

@@ -1,11 +1,11 @@
 {
   "run_id": "rehearsal",
   "run_kind": "rehearsal",
-  "timestamp_utc": "2026-08-28T22:36:24+00:00",
-  "git_sha": "b20366ea02ac5e5874362e05c82cbe2a8e222d71",
+  "timestamp_utc": "2026-08-28T23:00:54+00:00",
+  "git_sha": "15d396f3accd5514c49b1670dc9a1ad32fa17d8f",
   "dataset": {
     "path": "evaluation/gold/sample_icd10se.csv",
-    "sha256": "c0221ddacc0dcd8b3fe896b576647056b2a3ef452685e274641bb503bacea06e",
+    "sha256": "993c0d1ce1f11302990c38dd4f9c9af35c74fa14d54aedf7f00dd48fdbc83dde",
     "total_rows": 12,
     "eligible_rows": 12,
     "excluded_rows": 0,
