@@ -311,6 +311,37 @@ this is a setting rather than a code change.
 
 See [`.env.example`](.env.example) for the available options.
 
+### Configuring real providers does not affect the tests
+
+Having real credentials configured — in your shell or in `.env` — is safe. The
+ordinary test suite does not use them, and cannot reach a provider.
+
+- Provider variables such as `EMBEDDING_PROVIDER`, `LLM_PROVIDER`,
+  `OPENAI_API_KEY` and `ANTHROPIC_API_KEY` configure **the application**.
+- Ordinary tests **deliberately override those choices**. Before any test module
+  is imported, the harness pins both providers to the deterministic fakes,
+  blanks the application API keys, and points the provider base URLs at a dead
+  local port.
+- Ordinary tests **never use application API keys**, so an ordinary `pytest`
+  costs nothing regardless of what is configured.
+- Ordinary tests are **blocked from external network access**: outbound
+  connections are restricted to the database and localhost, so a provider call
+  fails loudly instead of leaving the machine. That guarantee does not depend on
+  the machine being offline.
+- **Live provider tests use dedicated `TEST_*` variables** — never the
+  application credentials — and are **opt-in twice over**: the credentials have
+  to be set *and* `--live-providers` has to be passed.
+
+```bash
+pytest                                        # never touches a provider
+pytest --live-providers -m requires_api_key   # deliberate, and costs money
+```
+
+The `TEST_*` variables are part of the test harness, not application settings;
+`app/config.py` does not read them. `tests/test_provider_isolation.py` holds all
+of this in place, including a child process started with hostile provider
+variables to prove the API and MCP paths stay offline.
+
 ---
 
 ## Project status

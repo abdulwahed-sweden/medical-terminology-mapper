@@ -220,18 +220,24 @@ def test_unknown_provider_is_refused() -> None:
 
 
 # --------------------------------------------------------- live smoke tests
+#
+# These cost money, so they are opt-in twice over: `--live-providers` has to be
+# passed, *and* the TEST_* variables have to be set. They deliberately do not
+# read the application's own credentials -- ANTHROPIC_API_KEY configures the
+# application, not the test suite, and quietly borrowing it is how an ordinary
+# `pytest` run ends up spending someone's money. See tests/conftest.py.
 
 
 @pytest.mark.requires_api_key
 @pytest.mark.skipif(
-    not os.environ.get("ANTHROPIC_API_KEY"),
-    reason="ANTHROPIC_API_KEY is not set; skipping the live Anthropic smoke test",
+    not os.environ.get("TEST_ANTHROPIC_API_KEY"),
+    reason="TEST_ANTHROPIC_API_KEY is not set; skipping the live Anthropic smoke test",
 )
 def test_anthropic_live_smoke() -> None:
     settings = Settings(
         llm_provider="anthropic",
-        llm_model=os.environ.get("LLM_MODEL", "claude-opus-5"),
-        anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
+        llm_model=os.environ.get("TEST_ANTHROPIC_MODEL", "claude-opus-5"),
+        anthropic_api_key=os.environ["TEST_ANTHROPIC_API_KEY"],
     )
     provider = build_llm_provider(settings)
     assert isinstance(provider, LLMProvider)
@@ -247,15 +253,15 @@ def test_anthropic_live_smoke() -> None:
 
 @pytest.mark.requires_api_key
 @pytest.mark.skipif(
-    not (os.environ.get("OPENAI_API_KEY") and os.environ.get("OPENAI_CHAT_BASE_URL")),
-    reason="OPENAI_API_KEY / OPENAI_CHAT_BASE_URL are not set; skipping the live test",
+    not (os.environ.get("TEST_OPENAI_API_KEY") and os.environ.get("TEST_OPENAI_CHAT_BASE_URL")),
+    reason="TEST_OPENAI_API_KEY / TEST_OPENAI_CHAT_BASE_URL are not set; skipping the live test",
 )
 def test_openai_compat_live_smoke() -> None:
     settings = Settings(
         llm_provider="openai_compat",
-        llm_model=os.environ.get("LLM_MODEL", "gpt-4o-mini"),
-        openai_api_key=os.environ["OPENAI_API_KEY"],
-        openai_chat_base_url=os.environ["OPENAI_CHAT_BASE_URL"],
+        llm_model=os.environ.get("TEST_OPENAI_CHAT_MODEL", "gpt-4o-mini"),
+        openai_api_key=os.environ["TEST_OPENAI_API_KEY"],
+        openai_chat_base_url=os.environ["TEST_OPENAI_CHAT_BASE_URL"],
     )
     provider = build_llm_provider(settings)
     result = provider.rerank("högt blodtryck", CANDIDATES, load_prompt())

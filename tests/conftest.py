@@ -26,6 +26,150 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 FIXTURES = REPO_ROOT / "tests" / "fixtures"
 
 
+# --------------------------------------------------------------------------- #
+# Provider isolation
+# --------------------------------------------------------------------------- #
+#
+# The application builds its providers from `Settings`, which reads the ambient
+# environment and `.env`. So a developer with real credentials configured had
+# ordinary API and MCP tests constructing live providers and calling
+# api.openai.com -- 40 failures, real requests, and with a working key it would
+# have been real spend instead of a 401.
+#
+# Ordinary tests therefore do not merely *default* to fakes; the provider
+# settings are pinned before anything can read them. Application credentials are
+# never test credentials. Live provider tests take their configuration from
+# TEST_* variables and run only when explicitly asked for -- see
+# `--live-providers` below.
+
+# Loopback, and the discard port, where nothing listens. If a code path ever
+# constructs an HTTP provider despite the pinning above, it fails at connect()
+# against a dead local port instead of quietly reaching a vendor.
+UNREACHABLE_BASE_URL = "http://127.0.0.1:9/v1"
+
+FAKE_PROVIDER_ENV = {
+    "EMBEDDING_PROVIDER": "fake",
+    "EMBEDDING_MODEL": "fake-hash-v1",
+    "LLM_PROVIDER": "fake",
+    "LLM_MODEL": "fake-rerank-v1",
+    "OPENAI_API_KEY": "",
+    "ANTHROPIC_API_KEY": "",
+    "OPENAI_EMBEDDINGS_BASE_URL": UNREACHABLE_BASE_URL,
+    "OPENAI_CHAT_BASE_URL": UNREACHABLE_BASE_URL,
+}
+
+LOOPBACK_HOSTS = ["127.0.0.1", "::1", "localhost"]
+
+
+def _pin_provider_settings() -> None:
+    """Force the provider settings, then drop any Settings built before now.
+
+    Environment variables outrank `.env` in pydantic-settings, so writing them
+    here is enough to override both a poisoned shell and a developer's real
+    `.env`. The cache clear matters as much as the assignment: `get_settings`
+    is `lru_cache`d, and a Settings object built during plugin loading would
+    otherwise survive and hand live providers to the whole session.
+    """
+    os.environ.update(FAKE_PROVIDER_ENV)
+
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+
+# Called at import, not from a fixture or a hook. pytest imports this conftest
+# before it collects -- let alone imports -- any test module, so this runs
+# before any test module can resolve Settings at import time. A session-scoped
+# autouse fixture would run too late for that.
+_pin_provider_settings()
+
+
+def _infrastructure_hosts() -> list[str]:
+    """Hosts the ordinary suite is allowed to reach: the database, and that is it."""
+    from sqlalchemy.engine import make_url
+
+    url = os.environ.get("DATABASE_URL")
+    if not url:
+        from app.config import get_settings
+
+        url = get_settings().database_url
+    try:
+        host = make_url(url).host
+    except Exception:  # pragma: no cover - a malformed URL fails later, loudly
+        return []
+    return [host] if host else []
+
+
+def _live_provider_hosts() -> list[str]:
+    """Hosts an opted-in live test may reach, taken from its TEST_* configuration."""
+    from urllib.parse import urlparse
+
+    hosts = ["api.anthropic.com"]
+    for variable in ("TEST_OPENAI_CHAT_BASE_URL", "TEST_OPENAI_EMBEDDINGS_BASE_URL"):
+        host = urlparse(os.environ.get(variable, "")).hostname
+        if host:
+            hosts.append(host)
+    return hosts
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--live-providers",
+        action="store_true",
+        default=False,
+        help=(
+            "Run the tests marked `requires_api_key` against real providers. "
+            "They need TEST_* credentials and they cost money, so having a key "
+            "in the environment is deliberately not enough on its own."
+        ),
+    )
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Skip live-provider tests unless a human asked for them by name."""
+    if config.getoption("--live-providers"):
+        return
+
+    skip = pytest.mark.skip(reason="live-provider test; pass --live-providers to run it")
+    for item in items:
+        if item.get_closest_marker("requires_api_key"):
+            item.add_marker(skip)
+
+
+@pytest.fixture(autouse=True)
+def _settings_cache_is_isolated() -> Iterator[None]:
+    """No Settings object crosses a test boundary, in either direction.
+
+    Cleared before, so a test never inherits Settings another test rebound;
+    cleared after, so a test that rebinds the environment cannot leave a
+    poisoned Settings cached for whatever runs next.
+    """
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
+def _network_is_local_only(request: pytest.FixtureRequest) -> None:
+    """Second line of defence: ordinary tests reach local infrastructure only.
+
+    The pinned settings above are what stops a provider being built at all.
+    This is what makes a mistake in that pinning fail loudly instead of
+    silently reaching a vendor -- and it does not depend on the machine
+    happening to be offline. pytest-socket lifts the restriction itself at
+    teardown.
+    """
+    from pytest_socket import socket_allow_hosts
+
+    hosts = [*LOOPBACK_HOSTS, *_infrastructure_hosts()]
+    if request.node.get_closest_marker("requires_api_key"):
+        hosts += _live_provider_hosts()
+
+    socket_allow_hosts(hosts, allow_unix_socket=True)
+
+
 def _database_url() -> str:
     """DATABASE_URL from the environment, else whatever the app is configured with.
 
