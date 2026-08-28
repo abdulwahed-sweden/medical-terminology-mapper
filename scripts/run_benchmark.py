@@ -35,6 +35,7 @@ from app.llm.base import load_prompt  # noqa: E402
 from app.logging_setup import configure_logging  # noqa: E402
 from evaluation.benchmark import (  # noqa: E402
     ARMS,
+    DIMENSIONS,
     REHEARSAL_MARKER,
     ArmResult,
     EmptyClassError,
@@ -56,7 +57,8 @@ ARM_FIELDS = [
     "row_id",
     "arm",
     "term",
-    "class",
+    "phrasing",
+    "target",
     "expected_code",
     "suggested_code",
     "status",
@@ -78,7 +80,8 @@ def _arm_row(result: ArmResult) -> dict[str, Any]:
         "row_id": result.row_id,
         "arm": result.arm,
         "term": result.term,
-        "class": result.case_class,
+        "phrasing": result.phrasing,
+        "target": result.target,
         "expected_code": result.expected_code,
         "suggested_code": result.suggested_code or "",
         "status": result.status,
@@ -119,7 +122,8 @@ def _write_paired(path: Path, changes: list[PairedChange]) -> None:
             "comparison",
             "row_id",
             "term",
-            "class",
+            "phrasing",
+            "target",
             "expected_code",
             "before_arm",
             "before_code",
@@ -132,7 +136,8 @@ def _write_paired(path: Path, changes: list[PairedChange]) -> None:
                 "comparison": c.comparison,
                 "row_id": c.row_id,
                 "term": c.term,
-                "class": c.case_class,
+                "phrasing": c.phrasing,
+                "target": c.target,
                 "expected_code": c.expected_code,
                 "before_arm": c.before_arm,
                 "before_code": c.before_code or "",
@@ -204,7 +209,8 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     excluded: list[Excluded] = [*malformed, *ineligible]
-    classes = sorted({row.case_class for row in rows if _in_run(row, args.system, args.version)})
+    in_run = [row for row in rows if _in_run(row, args.system, args.version)]
+    labels = {d: sorted({row.label(d) for row in in_run}) for d in DIMENSIONS}
 
     print(f"{run_kind.upper()}  run={run_id}")
     print(f"  {len(eligible)} eligible of {len(rows)} rows, {len(excluded)} excluded")
@@ -243,7 +249,6 @@ def main(argv: list[str] | None = None) -> int:
         total_rows=len(raw),
         eligible=eligible,
         excluded=excluded,
-        classes=classes,
         system=args.system,
         version=args.version,
         fingerprint=fingerprint,
@@ -258,7 +263,7 @@ def main(argv: list[str] | None = None) -> int:
         report = render_report(
             manifest=manifest,
             results=results,
-            classes=classes,
+            labels=labels,
             excluded=excluded,
             paired=paired,
         )

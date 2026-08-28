@@ -55,10 +55,11 @@ state — the report is where a number can be read next to what produced it.
 
 ## Two columns, not one — `phrasing` and `target`
 
-**Proposed for v1. Not yet implemented: the orchestrator still reads a single
-`class` column.** Adopting this costs one change in `evaluation/benchmark.py`
-(read two columns, group by each) and a second table in the report. It is much
-cheaper now than after 200 rows have been curated against the wrong shape.
+**Implemented.** The orchestrator reads both columns and reports each
+dimension separately (report sections A1 and A2). Gold files written before the
+split still load: a `class` naming a trap sets the `target` and leaves the
+`phrasing` `unclassified`, because a trap label says nothing about how the input
+was written and guessing would put labels in the file that nobody assigned.
 
 The single `class` column conflates two independent things:
 
@@ -76,7 +77,7 @@ The sample set shows the cost concretely. Ten of its twelve terms are literally
 the published preferred term, yet under one column only three rows are labelled
 `exact`, because the other seven were labelled for the trap they spring:
 
-| term | one column | `phrasing` | `target` |
+| term | old single column | `phrasing` | `target` |
 | --- | --- | --- | --- |
 | essentiell hypertoni | `exact` | `exact` | `plain` |
 | hypertensiv hjärtsjukdom **med** hjärtsvikt | `distinction` | `exact` | `distinction` |
@@ -117,11 +118,10 @@ well-formed one with no correct code, and the gate should be measured on both.
 
 ## Term diversity
 
-Every row carries its class, so results can be broken down by it. The classes
-below are the single-column form, which the sample set and the current
-orchestrator use; the split above is what v1 should adopt. `distinction`,
-`granularity` and `no_good_match` become `target` values, the rest `phrasing`
-values.
+The eight cases below are the vocabulary the two columns are drawn from:
+`distinction`, `granularity` and `no_good_match` (as `negative`) are `target`
+values, the rest are `phrasing` values. The table explains what each is *for*,
+which is the part that matters when deciding whether a row earns its place.
 
 | Class | What it is | Why it belongs |
 | --- | --- | --- |
@@ -144,32 +144,29 @@ are nominal.
 `sample_icd10se.csv`, 12 rows, all ICD-10-SE, chapters 4, 9 and 10:
 
 Labels were assigned mechanically, then reviewed against the fixture's own
-hierarchy. The rule: classify by the trap the row can spring — a distractor that
-exists in the terminology and plausibly shares the term's wording — not by
-whether a partner row happens to be in this file.
+hierarchy. The rule: classify the `target` by the trap the row can spring — a
+distractor that exists in the terminology and plausibly shares the term's
+wording — not by whether a partner row happens to be in this file.
 
-| Class | Rows | |
-| --- | --- | --- |
-| `granularity` | 4 | `I21` (a category) / `I21.9`, `I15.9`, `J45.9` |
-| `distinction` | 3 | `I11.0` / `I11.9`, `I12.0` |
-| `exact` | 3 | `essentiell hypertoni`, `renovaskulär hypertoni`, `diabetes mellitus typ 2` |
-| `paraphrase` | 1 | `hypertoni utan känd orsak` |
-| `synonym` | 1 | `högt blodtryck` |
-| `misspelling` | **0** | |
-| `abbreviation` | **0** | |
-| `no_good_match` | **0** | |
+| `phrasing` | Rows | | `target` | Rows |
+| --- | --- | --- | --- | --- |
+| `exact` | **10** | | `plain` | 5 |
+| `synonym` | 1 | | `granularity` | 4 |
+| `paraphrase` | 1 | | `distinction` | 3 |
+| `misspelling` | **0** | | `negative` | **0** |
+| `abbreviation` | **0** | | | |
 
-Read that table with the split above in mind: **ten of the twelve terms are
-literally the published preferred term**, so the three rows labelled `exact`
-badly understate how much plain exact matching this set actually exercises. That
-is the reporting defect the two-column form fixes.
+That is the split earning its place: **ten of the twelve terms are literally the
+published preferred term**, which the single column reported as three, because
+seven of them were labelled for the trap they spring instead.
 
 `akut hjärtinfarkt` → `I21` is the strongest row here and the only one of its
 kind: `I21` is a **non-leaf** code that is nonetheless assignable, so the row
 tests whether the system respects assignability rather than reaching for the
 more specific-looking `I21.9`.
 
-Three of the eight classes are absent entirely, one code system is absent
+Three of the eight cases are absent entirely — `misspelling`, `abbreviation`
+and `negative` — one code system is absent
 entirely, and the candidate pool is 25 concepts rather than roughly 39 000. The
 two classes most likely to separate the three arms — misspellings and
 abbreviations — are exactly the two with no rows. It is a fixture that keeps the
@@ -184,15 +181,14 @@ Same columns as `TEMPLATE.csv`, plus one:
 | `term` | The input, as it would be typed |
 | `target_system` | `icd10se` or `kva` |
 | `expected_code` | The correct code, or empty for a negative row |
-| `class` | Single-column form: one of the classes above. Required today. |
-| `phrasing` | *Proposed for v1* — `exact`, `synonym`, `paraphrase`, `misspelling`, `abbreviation` |
-| `target` | *Proposed for v1* — `plain`, `distinction`, `granularity`, `negative` |
+| `phrasing` | `exact`, `synonym`, `paraphrase`, `misspelling`, `abbreviation` — **required** |
+| `target` | `plain`, `distinction`, `granularity`, `negative` — **required** |
+| `class` | Legacy single column. Read only when `phrasing` and `target` are both absent. |
 | `source` | The official publication and section the code was read from |
 | `note` | Why this row is hard, or what it distinguishes |
 
-Until the two-column form is implemented, `class` is the one the tooling reads.
-A file carrying all three is not ambiguous — `class` wins — but it is a sign the
-split was specified and never finished.
+A file carrying all three is not ambiguous — `phrasing` and `target` win — but
+there is no reason to write `class` in a new file.
 
 `source` is not bureaucracy. A gold set whose provenance cannot be checked is an
 opinion, and a figure computed from it inherits that.
