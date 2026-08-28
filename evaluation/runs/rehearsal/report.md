@@ -13,13 +13,13 @@
 | | |
 | --- | --- |
 | run | `rehearsal` |
-| date (UTC) | 2026-08-28T11:34:55+00:00 |
-| git SHA | `5e282cb6415574b237e98e5900d97fe0a01b57e4` |
+| date (UTC) | 2026-08-28T22:15:45+00:00 |
+| git SHA | `34f81a587d8f7c7584ce608a035e10e2544f6cf3` |
 | system / version | icd10se / 2026-sample |
 | terminology fingerprint | 27 concepts, `89614bf095956505…` |
 | gold set | `sample_icd10se.csv` |
 | gold rows | 12 total, 12 eligible, 0 excluded |
-| gold SHA-256 | `658f1ae3adb23fa850133494698baca24c66008a5e7f8d00e7520b82d745347a` |
+| gold SHA-256 | `d83230ba02d4009d719df4f65b01782adf568cf44317d8eb08d030957ac4838d` |
 | LLM | fake: fake/fake-rerank-v1 |
 | embeddings | fake: fake/fake-hash-v1 (1536d) |
 | prompt | rerank_v1 @ `0d10a74f8553` |
@@ -32,12 +32,12 @@ describes the mix as much as the system.
 
 | class | n | | lexical | hybrid | full |
 | --- | ---: | --- | --- | --- | --- |
-| **distinction**  **LOW N** | 2 | Top-1 | 100% (2/2) | 100% (2/2) | 100% (2/2) |
-| | | Top-3 | 100% (2/2) | 100% (2/2) | 100% (2/2) |
-| **exact**  **LOW N** | 5 | Top-1 | 100% (5/5) | 100% (5/5) | 100% (5/5) |
-| | | Top-3 | 100% (5/5) | 100% (5/5) | 100% (5/5) |
-| **granularity**  **LOW N** | 3 | Top-1 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
+| **distinction**  **LOW N** | 3 | Top-1 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
 | | | Top-3 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
+| **exact**  **LOW N** | 3 | Top-1 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
+| | | Top-3 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
+| **granularity**  **LOW N** | 4 | Top-1 | 100% (4/4) | 100% (4/4) | 100% (4/4) |
+| | | Top-3 | 100% (4/4) | 100% (4/4) | 100% (4/4) |
 | **paraphrase**  **LOW N** | 1 | Top-1 | 100% (1/1) | 100% (1/1) | 100% (1/1) |
 | | | Top-3 | 100% (1/1) | 100% (1/1) | 100% (1/1) |
 | **synonym**  **LOW N** | 1 | Top-1 | 100% (1/1) | 100% (1/1) | 100% (1/1) |

@@ -19,16 +19,27 @@
 # No term, code, source or note was changed, and no row was added or removed.
 # THE LABELS ARE UNREVIEWED -- the author should check them before any figure
 # is broken down by class.
+#
+# The `class` column was assigned mechanically from each row's own note and
+# from the preferred term / synonym list in tests/fixtures/icd10se_sample.txt,
+# then reviewed against the fixture's actual hierarchy. The rule applied is:
+# classify by the trap the row can spring -- a distractor that exists in the
+# terminology and plausibly shares the term's wording -- not by whether a
+# partner row happens to be in this file.
+#
+# No term, code, source or note has ever been changed, and no row was added
+# or removed. See GOLD_SET_GUIDE.md: this single column is superseded for the
+# v1 set by separate `phrasing` and `target` columns.
 term,target_system,expected_code,class,source,note
 högt blodtryck,icd10se,I10,synonym,"ICD-10-SE 2026 systematisk förteckning, kap. 9","""Högt blodtryck"" is an Innefattar term under I10, not its preferred term"
 essentiell hypertoni,icd10se,I10,exact,"ICD-10-SE 2026 systematisk förteckning, kap. 9",matches the preferred term directly
 hypertoni utan känd orsak,icd10se,I10,paraphrase,"ICD-10-SE 2026 systematisk förteckning, kap. 9",paraphrase of the parenthetical in the preferred term
 hypertensiv hjärtsjukdom med hjärtsvikt,icd10se,I11.0,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9","must not be confused with I11.9, the same disease without heart failure"
 hypertensiv hjärtsjukdom utan hjärtsvikt,icd10se,I11.9,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9","the ""utan"" is the whole distinction from I11.0"
-hypertensiv njursjukdom med njursvikt,icd10se,I12.0,exact,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
+hypertensiv njursjukdom med njursvikt,icd10se,I12.0,distinction,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
 sekundär hypertoni ospecificerad,icd10se,I15.9,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",I15 is the category; the unspecified subcategory is the codable one
 renovaskulär hypertoni,icd10se,I15.0,exact,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
 akut hjärtinfarkt,icd10se,I21,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",the category itself; I21.9 is the unspecified subcategory
 akut hjärtinfarkt ospecificerad,icd10se,I21.9,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 9",
-astma ospecificerad,icd10se,J45.9,exact,"ICD-10-SE 2026 systematisk förteckning, kap. 10",
+astma ospecificerad,icd10se,J45.9,granularity,"ICD-10-SE 2026 systematisk förteckning, kap. 10",
 diabetes mellitus typ 2,icd10se,E11,exact,"ICD-10-SE 2026 systematisk förteckning, kap. 4",
