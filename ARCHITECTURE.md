@@ -544,6 +544,77 @@ mood.
 
 ---
 
+### Three benchmark arms, recorded on the proposal
+
+Phase 3 compares three pipelines, named the same way in code, CLI, storage and
+docs:
+
+| Arm | Retrieval | Model | Suggested code |
+| --- | --- | --- | --- |
+| `lexical` | lexical only | none | top-1 by lexical rank |
+| `hybrid` | lexical + vector, RRF merged | none | top-1 by RRF |
+| `full` | lexical + vector, RRF merged | LLM rerank | top-1 by the model |
+
+`lexical` versus `hybrid` answers *what does vector retrieval add*. `hybrid`
+versus `full` answers *what does the LLM add*. There is deliberately **no
+vector-only arm**: no production configuration would ever run one, so measuring
+it would spend gold-set signal on a question nobody is asking.
+
+`lexical` and `hybrid` do not call the model at all — not a cheaper model, not a
+shorter prompt, no call. `tests/test_arms.py` counts the invocations rather than
+trusting the branch, because an arm that quietly consulted the model would
+report the full pipeline's accuracy under another name and nothing would look
+wrong. For the same reason `rerank` stays null and `model_confidence` stays null
+on those arms: no model ran, so there is nothing to record, and inventing a
+record in an append-only audit table is not an option.
+
+The arm is a column on `proposals`, not a runtime flag someone has to remember.
+The comparison has to be reconstructable from the audit trail alone — that was
+the design intent, and a readiness check found it was impossible, because a
+stored proposal did not say which pipeline produced it. Existing rows backfill
+to `full`: until this change there was no other way to produce one.
+
+**The arm is not a product feature.** The API request model and the MCP tool
+schemas do not carry it, and a validator or an agent always gets `full`. An
+evaluation instrument that a caller can use to hand a human a cheaper answer is
+a liability, not a feature.
+
+**The gate is identical in every arm, and that is an asymmetry worth naming.**
+The retrieval gate is lexical-evidence-based today, so it can admit or refuse a
+query without consulting vector evidence at all. That applies equally to all
+three arms, which keeps them comparable. It does mean the `hybrid` and `full`
+arms are judged partly through a gate that cannot see the signal they add.
+Phase 3 reports this rather than compensating per arm — a per-arm gate would
+make the arms incomparable, which defeats the exercise. Calibrating vector
+floors requires a real embedding space to measure, which is why they stay empty
+(below).
+
+---
+
+### The decisions that precede the first real embedding run
+
+Made now, so the first run does not improvise:
+
+**Embedding model: `text-embedding-3-small`, 1536 dimensions.** It matches the
+existing `vector(1536)` column, so there is no schema migration and nothing
+already stored has to be re-embedded. `text-embedding-3-large` (3072) would
+require both. That door is documented, not taken. If phase 3 shows the small
+model failing Swedish medical text, that is a finding that deserves its own
+decision with evidence behind it — not a default nobody chose.
+
+**Vector gate floors stay empty through phase 3.** `gate_vector_floors` is
+calibrated after a real embedding space exists, from the misses file of the
+first benchmark run. A floor guessed before that measures the fake provider's
+hash noise, which is why the setting has always defaulted to empty.
+
+**Phase 3 runs KVÅ first.** KVÅ is verified against the real 2026 workbook.
+ICD-10-SE's loader is still `FORMAT_UNVERIFIED` — no machine-readable release
+has been obtainable — so an ICD-10-SE benchmark would inherit an unverified
+foundation and could not distinguish a mapping failure from a loading one.
+ICD-10-SE joins when the real file arrives.
+
+---
+
 ## Known limitations
 
 1. **No stemming or lemmatisation.** Swedish medical vocabulary is dominated by

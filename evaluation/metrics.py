@@ -32,6 +32,7 @@ class RowResult:
     latency_ms_rerank: int
     proposal_id: str
     note: str = ""
+    arm: str = "full"
 
     @property
     def top1_hit(self) -> bool:
@@ -67,6 +68,7 @@ class EvaluationSummary:
     mean_latency_ms_rerank: float
     rerank_failures: int
     misses: list[RowResult] = field(default_factory=list)
+    arm: str = "full"
 
 
 def summarize(results: Sequence[RowResult]) -> EvaluationSummary:
@@ -83,6 +85,8 @@ def summarize(results: Sequence[RowResult]) -> EvaluationSummary:
         mean_latency_ms_rerank=statistics.fmean(r.latency_ms_rerank for r in results),
         rerank_failures=sum(r.status == "rerank_failed" for r in results),
         misses=[r for r in results if not r.top1_hit],
+        # Every row in a run comes from one arm; the first is representative.
+        arm=results[0].arm,
     )
 
 
@@ -94,6 +98,7 @@ def format_summary(summary: EvaluationSummary) -> str:
         return f"{value * 100:5.1f}%  ({round(value * summary.total)}/{summary.total})"
 
     lines = [
+        f"arm                     {summary.arm}",
         f"rows evaluated          {summary.total}",
         f"Top-1 accuracy          {pct(summary.top1_accuracy)}",
         f"Top-3 recall            {pct(summary.top3_recall)}",

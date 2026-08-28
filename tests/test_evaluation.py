@@ -6,6 +6,7 @@ down because a wrong metric quietly misreports quality rather than failing.
 
 from __future__ import annotations
 
+import csv
 from pathlib import Path
 
 import pytest
@@ -94,6 +95,30 @@ def test_summary_formats_counts_alongside_percentages() -> None:
 
 
 # --------------------------------------------------------------- gold files
+
+
+def test_the_summary_names_the_arm_it_measured() -> None:
+    """A figure without its arm is unattributable: `lexical` and `full` produce
+    the same shape of number and mean entirely different things."""
+    result = _row("I10", "I10", ["I10"])
+    result.arm = "hybrid"
+
+    assert "arm                     hybrid" in format_summary(summarize([result]))
+
+
+def test_the_misses_file_records_the_arm(tmp_path: Path) -> None:
+    """The misses file is what a calibration pass reads later; without the arm
+    it cannot tell which pipeline produced the miss."""
+    from evaluation.run_eval import _write_misses
+
+    miss = _row("I10", "J45", ["J45"])
+    miss.arm = "lexical"
+    path = tmp_path / "misses.csv"
+    _write_misses(path, [miss])
+
+    rows = list(csv.reader(path.open(encoding="utf-8")))
+    assert rows[0][0] == "arm"
+    assert rows[1][0] == "lexical"
 
 
 def test_template_has_the_specified_columns() -> None:

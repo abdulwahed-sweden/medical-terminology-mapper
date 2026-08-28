@@ -186,8 +186,14 @@ def retrieve(
     settings: Settings,
     embedding_provider: EmbeddingProvider,
     limit: int | None = None,
+    include_vector: bool = True,
 ) -> Retrieval:
-    """Lexical + vector retrieval, merged. No gate, no model, nothing written."""
+    """Lexical + vector retrieval, merged. No gate, no model, nothing written.
+
+    `include_vector=False` is the `lexical` benchmark arm. It skips the vector
+    stage rather than requesting nought neighbours from it: with a live provider
+    the query would otherwise be embedded, and paid for, only to be discarded.
+    """
     started = time.perf_counter()
 
     lexical = lexical_search(
@@ -199,15 +205,17 @@ def retrieve(
         trigram_threshold=settings.trigram_threshold,
         index_descriptions=settings.index_descriptions,
     )
-    vector = vector_search(
-        session,
-        query_vector=embedding_provider.embed([query])[0],
-        system=system,
-        version=version,
-        provider=embedding_provider.provider_id,
-        model=embedding_provider.model_id,
-        top_k=settings.vector_top_k,
-    )
+    vector: list[Candidate] = []
+    if include_vector:
+        vector = vector_search(
+            session,
+            query_vector=embedding_provider.embed([query])[0],
+            system=system,
+            version=version,
+            provider=embedding_provider.provider_id,
+            model=embedding_provider.model_id,
+            top_k=settings.vector_top_k,
+        )
     merged = merge_candidates(
         lexical,
         vector,

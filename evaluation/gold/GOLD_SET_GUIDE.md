@@ -19,6 +19,17 @@ phase 3 is asking.
 
 ## Minimum size
 
+Staged, because 300 curated rows is months of work and a comparison worth seeing
+does not need all of them.
+
+**v1 — 100 rows per system, all eight classes present, at least 10 per class.**
+Enough to expose a large difference between arms, and enough to show which
+classes need more data before a figure from them means anything. A v1 result is
+a direction, not a number to publish.
+
+**v2 — the 300-row target below**, which is where per-class figures start to
+carry weight.
+
 - **300 rows** per code system as a floor for a headline figure. Below roughly
   that, the difference between two arms is inside the noise of a handful of
   rows: at 100 rows one row is a full percentage point, and a 3-point gap
@@ -28,6 +39,19 @@ phase 3 is asking.
 - Report per-class figures **always**, and the headline number never on its own.
   An aggregate over a set whose class mix was chosen by hand is a statement
   about the mix as much as about the system.
+
+### The reporting rule
+
+The benchmark report prints, for every class: **n**, the result for each arm,
+and a `LOW N` warning whenever n < 30.
+
+**No percentage appears anywhere without its n.** Not in the report, not in a
+commit message, not in the README, not in a screenshot. A bare "82%" outlives
+every caveat attached to it, and at n = 11 it is not a measurement at all.
+
+Aggregate numbers do not leave the evaluation report. The README states no
+accuracy figures, and that does not change when there is finally a number to
+state — the report is where a number can be read next to what produced it.
 
 ## Term diversity
 

@@ -80,6 +80,11 @@ class ProposalRow(Base):
     # caller, the MCP server, or an evaluation run. It says where a row came
     # from, never who is accountable for it -- that is the decision row's job.
     origin: Mapped[str] = mapped_column(String(16), nullable=False, default="api")
+    # Which benchmark arm produced this proposal. `full` is the pipeline every
+    # surface runs; `lexical` and `hybrid` exist so the phase 3 comparison can
+    # be reconstructed from the audit trail alone rather than from whatever the
+    # person running it remembers configuring.
+    arm: Mapped[str] = mapped_column(String(16), nullable=False, default="full")
     # Free text supplied by the caller (an agent's client name, say). It is
     # explicitly NOT a validator identity and never appears on a decision.
     requested_by: Mapped[str | None] = mapped_column(String(128), nullable=True)
