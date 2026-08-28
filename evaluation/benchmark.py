@@ -246,6 +246,14 @@ def run_arm(
     run_id: str,
     dry_run: bool = True,
 ) -> list[ArmResult]:
+    """Run one arm over the eligible rows.
+
+    `dry_run` rolls each proposal back after reading it, which assumes
+    `session_factory` hands out a session per row -- as `session_scope` does.
+    A caller that yields one shared session for every row must pass
+    `dry_run=False`, or the rollback will discard whatever else that
+    transaction was holding.
+    """
     results: list[ArmResult] = []
     for row in rows:
         with session_factory() as session:

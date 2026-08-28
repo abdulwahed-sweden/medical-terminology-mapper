@@ -75,6 +75,12 @@ def _run_all(session_factory, eligible, version: str) -> dict[str, list[ArmResul
             llm_provider=llm,
             prompt=load_prompt("rerank_v1"),
             run_id="test",
+            # The CLI hands each row its own session, so rolling back there
+            # discards that row's proposal and nothing else. Here every row
+            # shares the one test transaction, and a rollback would take the
+            # fixture data with it. The `connection` fixture rolls the whole
+            # thing back at teardown regardless.
+            dry_run=False,
         )
         for arm in ARMS
     }
