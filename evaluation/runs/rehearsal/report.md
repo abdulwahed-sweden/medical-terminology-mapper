@@ -13,8 +13,8 @@
 | | |
 | --- | --- |
 | run | `rehearsal` |
-| date (UTC) | 2026-08-28T11:26:22+00:00 |
-| git SHA | `6907dff984f189c48ffec9e6a2e528066a068712` |
+| date (UTC) | 2026-08-28T11:34:55+00:00 |
+| git SHA | `5e282cb6415574b237e98e5900d97fe0a01b57e4` |
 | system / version | icd10se / 2026-sample |
 | terminology fingerprint | 27 concepts, `89614bf095956505…` |
 | gold set | `sample_icd10se.csv` |

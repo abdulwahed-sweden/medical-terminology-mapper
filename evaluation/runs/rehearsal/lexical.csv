@@ -1,13 +1,13 @@
 row_id,arm,term,class,expected_code,suggested_code,status,correct,expected_rank,top3,failure,matched_field,gate_fired,gate_reason,candidate_codes,ranked_codes,proposal_id
-1,lexical,högt blodtryck,synonym,I10,I10,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.599),I10 I15,I10 I15,122c7c65-fedc-419d-a5f4-4098987002cb
-2,lexical,essentiell hypertoni,exact,I10,I10,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.531),I10 I11 I12 I13 I15 I15.0 I15.1 I15.9,I10 I11 I12 I13 I15 I15.0 I15.1 I15.9,94eb79bf-b77d-4ff9-a034-c73467d19711
-3,lexical,hypertoni utan känd orsak,paraphrase,I10,I10,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.478),I10 I11,I10 I11,31afa24b-6571-469e-aed1-a6cd4e9e7107
-4,lexical,hypertensiv hjärtsjukdom med hjärtsvikt,distinction,I11.0,I11.0,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.571),I11.0 I11.9 I12.0 I11 I12.9 I13.9,I11.0 I11.9 I12.0 I11 I12.9 I13.9,2e2ead68-0d9e-4f43-907c-73fee9127462
-5,lexical,hypertensiv hjärtsjukdom utan hjärtsvikt,distinction,I11.9,I11.9,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.571),I11.9 I11.0 I12.9 I12.0 I13.9 I11,I11.9 I11.0 I12.9 I12.0 I13.9 I11,557760e8-d402-4732-b6e7-29274cd943d9
-6,lexical,hypertensiv njursjukdom med njursvikt,exact,I12.0,I12.0,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.571),I12.0 I12.9 I11.0 I12 I13.9 I11.9 I13,I12.0 I12.9 I11.0 I12 I13.9 I11.9 I13,a243471a-9ddf-4729-9805-ce72fc3e2314
-7,lexical,sekundär hypertoni ospecificerad,granularity,I15.9,I15.9,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),I15.9 I15 I15.1,I15.9 I15 I15.1,cd677591-f598-43aa-a421-8de0904daba5
-8,lexical,renovaskulär hypertoni,exact,I15.0,I15.0,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),I15.0,I15.0,17dec808-9b5b-4e86-af7c-915a1e535807
-9,lexical,akut hjärtinfarkt,granularity,I21,I21,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),I21 I21.9,I21 I21.9,05bb8d1d-3c15-41ee-9949-7ee68d5018a8
-10,lexical,akut hjärtinfarkt ospecificerad,granularity,I21.9,I21.9,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),I21.9 I21,I21.9 I21,570c286b-4ea0-4ea6-9e3f-39aa509c727e
-11,lexical,astma ospecificerad,exact,J45.9,J45.9,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),J45.9 I13.9 I15.9 I21.9,J45.9 I13.9 I15.9 I21.9,187c4aa6-5839-406f-8eb2-84cebaa274c8
-12,lexical,diabetes mellitus typ 2,exact,E11,E11,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.697),E11,E11,e2d28af3-576a-4bba-89b2-cd204b5d0b27
+1,lexical,högt blodtryck,synonym,I10,I10,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.599),I10 I15,I10 I15,daa8762a-8d78-4956-94f4-b46232b6cc36
+2,lexical,essentiell hypertoni,exact,I10,I10,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.531),I10 I11 I12 I13 I15 I15.0 I15.1 I15.9,I10 I11 I12 I13 I15 I15.0 I15.1 I15.9,981dfddf-b58d-47ed-9f42-951f01778631
+3,lexical,hypertoni utan känd orsak,paraphrase,I10,I10,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.478),I10 I11,I10 I11,dd9a9b37-8b87-448e-9cab-bf111fc0a6fc
+4,lexical,hypertensiv hjärtsjukdom med hjärtsvikt,distinction,I11.0,I11.0,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.571),I11.0 I11.9 I12.0 I11 I12.9 I13.9,I11.0 I11.9 I12.0 I11 I12.9 I13.9,9971b152-e0f3-4d6b-926b-0483a861bcfa
+5,lexical,hypertensiv hjärtsjukdom utan hjärtsvikt,distinction,I11.9,I11.9,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.571),I11.9 I11.0 I12.9 I12.0 I13.9 I11,I11.9 I11.0 I12.9 I12.0 I13.9 I11,56d41bb5-7f32-4487-b071-2c8a3bb4a3ce
+6,lexical,hypertensiv njursjukdom med njursvikt,exact,I12.0,I12.0,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.571),I12.0 I12.9 I11.0 I12 I13.9 I11.9 I13,I12.0 I12.9 I11.0 I12 I13.9 I11.9 I13,ef5131d9-00ea-4054-841e-89fc6be0693e
+7,lexical,sekundär hypertoni ospecificerad,granularity,I15.9,I15.9,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),I15.9 I15 I15.1,I15.9 I15 I15.1,5bf88555-4c5d-4929-b4a1-ce0de6a5326b
+8,lexical,renovaskulär hypertoni,exact,I15.0,I15.0,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),I15.0,I15.0,de2167d0-1006-49c8-9040-c054d74cc6cb
+9,lexical,akut hjärtinfarkt,granularity,I21,I21,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),I21 I21.9,I21 I21.9,25488b26-218b-4a59-880b-b1c98ffd6fe3
+10,lexical,akut hjärtinfarkt ospecificerad,granularity,I21.9,I21.9,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),I21.9 I21,I21.9 I21,f412c6be-a62f-4ff5-9525-fd65d844c137
+11,lexical,astma ospecificerad,exact,J45.9,J45.9,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.500),J45.9 I13.9 I15.9 I21.9,J45.9 I13.9 I15.9 I21.9,95fc8cac-cde6-4330-b4b7-77ff1005df61
+12,lexical,diabetes mellitus typ 2,exact,E11,E11,pending,yes,1,yes,,title,no,fulltextträff i kodverket (ts_rank 0.697),E11,E11,82b7c617-730b-4368-9ed4-d917186f0ba8
