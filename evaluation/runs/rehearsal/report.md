@@ -13,37 +13,51 @@
 | | |
 | --- | --- |
 | run | `rehearsal` |
-| date (UTC) | 2026-08-28T22:15:45+00:00 |
-| git SHA | `34f81a587d8f7c7584ce608a035e10e2544f6cf3` |
+| date (UTC) | 2026-08-28T22:36:24+00:00 |
+| git SHA | `b20366ea02ac5e5874362e05c82cbe2a8e222d71` |
 | system / version | icd10se / 2026-sample |
 | terminology fingerprint | 27 concepts, `89614bf095956505…` |
 | gold set | `sample_icd10se.csv` |
 | gold rows | 12 total, 12 eligible, 0 excluded |
-| gold SHA-256 | `d83230ba02d4009d719df4f65b01782adf568cf44317d8eb08d030957ac4838d` |
+| gold SHA-256 | `c0221ddacc0dcd8b3fe896b576647056b2a3ef452685e274641bb503bacea06e` |
 | LLM | fake: fake/fake-rerank-v1 |
 | embeddings | fake: fake/fake-hash-v1 (1536d) |
 | prompt | rerank_v1 @ `0d10a74f8553` |
 | gate | lexical_evidence v2, ts_rank>0.0, strict_sim≥0.6, min_chars=3, vector_floors=none |
 
-## A. By case class
+## A. By label
 
-Per-class first, deliberately. An aggregate over a hand-chosen class mix
+Per-label first, deliberately. An aggregate over a hand-chosen mix
 describes the mix as much as the system.
 
-| class | n | | lexical | hybrid | full |
+Two dimensions, because they vary independently: **phrasing** is how the
+input is written, **target** is what the correct answer demands. A row
+can be the published preferred term and still test a med/utan pair, and
+reading only one of these would hide that.
+
+### A1. By phrasing — how the input is written
+
+| phrasing | n | | lexical | hybrid | full |
 | --- | ---: | --- | --- | --- | --- |
-| **distinction**  **LOW N** | 3 | Top-1 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
-| | | Top-3 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
-| **exact**  **LOW N** | 3 | Top-1 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
-| | | Top-3 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
-| **granularity**  **LOW N** | 4 | Top-1 | 100% (4/4) | 100% (4/4) | 100% (4/4) |
-| | | Top-3 | 100% (4/4) | 100% (4/4) | 100% (4/4) |
+| **exact**  **LOW N** | 10 | Top-1 | 100% (10/10) | 100% (10/10) | 100% (10/10) |
+| | | Top-3 | 100% (10/10) | 100% (10/10) | 100% (10/10) |
 | **paraphrase**  **LOW N** | 1 | Top-1 | 100% (1/1) | 100% (1/1) | 100% (1/1) |
 | | | Top-3 | 100% (1/1) | 100% (1/1) | 100% (1/1) |
 | **synonym**  **LOW N** | 1 | Top-1 | 100% (1/1) | 100% (1/1) | 100% (1/1) |
 | | | Top-3 | 100% (1/1) | 100% (1/1) | 100% (1/1) |
 
-`LOW N` marks any class with fewer than 30 rows. At those sizes a
+### A2. By target — what the answer demands
+
+| target | n | | lexical | hybrid | full |
+| --- | ---: | --- | --- | --- | --- |
+| **distinction**  **LOW N** | 3 | Top-1 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
+| | | Top-3 | 100% (3/3) | 100% (3/3) | 100% (3/3) |
+| **granularity**  **LOW N** | 4 | Top-1 | 100% (4/4) | 100% (4/4) | 100% (4/4) |
+| | | Top-3 | 100% (4/4) | 100% (4/4) | 100% (4/4) |
+| **plain**  **LOW N** | 5 | Top-1 | 100% (5/5) | 100% (5/5) | 100% (5/5) |
+| | | Top-3 | 100% (5/5) | 100% (5/5) | 100% (5/5) |
+
+`LOW N` marks any label with fewer than 30 rows. At those sizes a
 single row moves the figure by several points; treat them as direction,
 not measurement.
 
