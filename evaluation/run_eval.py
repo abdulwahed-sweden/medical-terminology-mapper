@@ -259,7 +259,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _write_misses(path: Path, misses: list[RowResult]) -> None:
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(
             [
                 "arm",

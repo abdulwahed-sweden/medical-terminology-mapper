@@ -99,8 +99,11 @@ def _arm_row(result: ArmResult) -> dict[str, Any]:
 
 
 def _write_csv(path: Path, fields: list[str], rows: list[dict[str, Any]]) -> None:
+    # `lineterminator="\n"`: csv defaults to CRLF, which makes every regenerated
+    # run directory a whole-file diff and makes git rewrite the endings on the
+    # way in. The artefacts are committed, so the churn is not free.
     with path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=fields)
+        writer = csv.DictWriter(handle, fieldnames=fields, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
