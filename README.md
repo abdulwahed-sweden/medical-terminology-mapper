@@ -346,36 +346,42 @@ variables to prove the API and MCP paths stay offline.
 
 ## Project status
 
-**Phase 1 is closed. Phase 2 (the MCP server) is merged. Stabilisation is in
-progress.**
+**Development is closed.** Phase 1, the Phase 2 MCP server, the stabilisation
+work between them, and the Phase 3 benchmark tooling are all complete. The
+formal Phase 3 measurement was never run.
 
-Verified before publication: the full test suite, code linting, formatting,
-strict type checking, database migrations from an empty database, Docker
-startup, sample and real KVÅ loading, the "no good match" behaviour, and the
-append-only protections.
+Verified: the full test suite, linting, formatting, strict type checking,
+database migrations from an empty database, Docker startup, the MCP entry point
+inside the container, sample and real KVÅ loading, the "no good match"
+behaviour, and the append-only protections.
 
-Stabilisation is the work between phase 2 and phase 3: closing the things that
-shipped unfinished rather than adding anything. So far that is a silent
-wrong-answer bug in vector search — the query could return no candidates at all
-depending on which plan the database chose, which is
-[recorded in ARCHITECTURE.md](ARCHITECTURE.md) — a CI job that builds the Docker
-image and calls the MCP server inside it, and a tested HTTP transport.
+The benchmark tooling is finished and rehearsed, not used. `scripts/run_benchmark.py`
+runs three arms — lexical, hybrid and full — over one gold set and writes a run
+directory whose `manifest.json` makes the report reproducible. A worked example
+with the deterministic fake providers is committed at
+[`evaluation/runs/rehearsal/`](evaluation/runs/rehearsal/); it measures the
+instrument and says so in its own filename.
 
-**Phase 3** is next and has not been started: a comparative benchmark measuring
-word matching against vector search against the full pipeline, computed from
-stored proposals. The measuring tool already exists. What it needs before the
-comparison means anything is a curated reference set — see
+**No comparative benchmark was run against a curated gold set**, because no such
+gold set exists — see
 [evaluation/gold/GOLD_SET_GUIDE.md](evaluation/gold/GOLD_SET_GUIDE.md) for what
-that has to look like — and, for the arms that use a real embedding model, an
-API key. Until both exist the benchmark can be run but not believed.
+one would have to contain — and the live embedding smoke test was never run for
+want of an API key. The KVÅ 2026 loader is verified against the real published
+workbook; the ICD-10-SE loader is **not**, because no machine-readable release
+was obtainable, and it remains marked `FORMAT_UNVERIFIED`.
 
-Also deferred: SNOMED CT content, an autocomplete endpoint, a bilingual
-interface, and user authentication.
+Deliberately not included: SNOMED CT content (it needs an affiliate licence),
+the Sijill integration, an autocomplete endpoint, a bilingual interface, user
+authentication, and any production hardening.
 
 This is **not** a production system and it is **not** clinically validated. No
 accuracy figures are published, because a meaningful figure requires a carefully
-prepared reference set that does not yet exist. The project includes the
-measuring tool, not a result.
+prepared reference set that does not exist. The project includes the measuring
+tool, not a result. The Vercel deployments attached to this repository are
+automatic builds of the default branch — they are not evidence of a
+production-ready deployment, and nothing has been operated as a service.
+
+A summary of the final state is in [FINAL_STATUS.md](FINAL_STATUS.md).
 
 ---
 

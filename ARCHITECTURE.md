@@ -679,12 +679,17 @@ ICD-10-SE joins when the real file arrives.
 
 | Phase | Scope |
 | --- | --- |
-| **1** (this) | ICD-10-SE + KVÅ, hybrid retrieval, LLM rerank, human validation, audit |
-| 2 | `terminology-mcp` — a second surface over the same adapters |
-| 3 | Comparative benchmark: lexical vs embeddings vs RAG+LLM, from stored proposals |
-| 4 | SNOMED CT loader (requires an affiliate licence — see [LICENSING.md](LICENSING.md)) |
-| 5 | Boundary integration: validated mappings crossing an organisational boundary |
+| **1** — complete | ICD-10-SE + KVÅ, hybrid retrieval, LLM rerank, human validation, audit |
+| **2** — complete | `terminology-mcp` — a second surface over the same adapters |
+| **3** — tooling only | Comparative benchmark: lexical vs hybrid vs full. Built and rehearsed; never run against a curated gold set. |
+| 4 — not started | SNOMED CT loader (requires an affiliate licence — see [LICENSING.md](LICENSING.md)) |
+| 5 — not started | Boundary integration: validated mappings crossing an organisational boundary |
 
-Phase 2 is merged: `terminology-mcp` is a second surface over the same
-terminology adapters, built only once those adapters were proven. Phase 3 is
-next and has not been started.
+Development stopped after phase 3's tooling. Phases 1 and 2 are complete, as is
+the stabilisation work between them. Phase 3's benchmark machinery is built and
+rehearsed with the fake providers, but **no formal measurement was ever run**:
+that needs a curated gold set and a live embedding model, and neither exists
+here. Phases 4 and 5 were never started.
+
+The roadmap is left in place because it records what the design anticipated, not
+what was delivered. [FINAL_STATUS.md](FINAL_STATUS.md) is the accurate summary.
